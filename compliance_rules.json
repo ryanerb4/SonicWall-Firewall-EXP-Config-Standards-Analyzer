@@ -1,0 +1,66 @@
+{
+  "_about": "Compliance rules for the SonicWall EXP audit. Edit these values to match client policy; sonicwall_compare.py reads this file at runtime.",
+
+  "trusted_zone": "LAN",
+  "_trusted_zone_note": "The main internal / trusted network. All inter-VLAN access is judged relative to this zone.",
+
+  "trusted_zones": ["LAN", "SSLVPN"],
+  "_trusted_zones_note": "Zones treated as trusted user networks alongside the LAN. SSL VPN remote users land in SSLVPN and legitimately need to reach LAN servers/resources, so SSLVPN->LAN is allowed and NOT flagged. Any zone NOT in this list that reaches the LAN is a red flag. Management access is governed separately by management.admin_allowed_zones (LAN only) — being a trusted DATA zone does not grant firewall-management access.",
+
+  "vpn_user_zones": ["SSLVPN"],
+  "_vpn_user_zones_note": "Zones holding remote-access VPN USERS. Two rules apply: (1) VPN user-to-user traffic must be blocked (intra-zone communication off) to stop lateral movement between remote sessions; (2) the LAN must NOT initiate connections TO these zones (LAN->SSLVPN blocked) — remote users reach LAN servers, not the other way around.",
+
+  "lan_requirements": {
+    "content_filter_required": true,
+    "ips_required": true,
+    "no_inbound_from_other_zones": true,
+    "_note": "Content filtering and IPS/IDS are REQUIRED on the trusted LAN. Any VLAN/zone/interface allowed to talk INTO the LAN is a red flag."
+  },
+
+  "ssh": {
+    "must_be_enabled": true,
+    "allowed_zones": ["LAN"],
+    "max_source_ips": 2,
+    "_note": "SSH management must be enabled, may ONLY be reachable from the LAN zone, and must be restricted to at most 2 source IPs."
+  },
+
+  "management": {
+    "max_source_ips": 2,
+    "admin_allowed_zones": ["LAN"],
+    "admin_source_object": "Mgmt-Jumpbox",
+    "admin_source_description": "the jumpbox that runs the Connect Secure agent",
+    "unrestricted_access_is_red_flag": true,
+    "_note": "The admin interface (HTTPS/HTTP/SNMP) and SSH may ONLY be reachable from the LAN zone, and must be IP-restricted to at most max_source_ips. Every other zone — VPN, WAN, and all other VLANs — must be denied management access. To also permit IP-restricted WAN/GMS management, add \"WAN\" to admin_allowed_zones. Unrestricted (Any-source) management access is a red flag."
+  },
+
+  "vpn": {
+    "sslvpn_requires_mfa": true,
+    "accepted_mfa": ["DUO", "Entra"],
+    "accepted_directory": ["Active Directory", "LDAP", "Entra"],
+    "_note": "If SSL VPN is configured, DUO or Entra (SAML) MFA is REQUIRED. Directory should be AD/LDAP or Entra."
+  },
+
+  "external_services": {
+    "wan_inbound_any_source_is_red_flag": true,
+    "expected_open_listeners": ["IKE", "SSL VPN", "SSLVPN", "SonicpointN", "NAT-T"],
+    "_note": "WAN-inbound services open to any source are red flags, except expected VPN listeners which must accept any remote IP."
+  },
+
+  "consistency": {
+    "geo_blocking_match_strictest": true,
+    "content_filter_match_strictest": true,
+    "_note": "Across all firewalls for one client, geo-blocking and blocked content-filter categories must match. If one firewall blocks something, they all must. The STRICTEST firewall (union of everything blocked) is the baseline; anything missing on a peer is an exception."
+  },
+
+  "expected_vlan_roles": {
+    "Printers": ["print"],
+    "Phones": ["phone", "voip", "voice"],
+    "ATM": ["atm"],
+    "Camera": ["camera", "cctv", "nvr", "dvr", "surveil"],
+    "IOT / HVAC / Postage": ["iot", "hvac", "postage", "pitney", "meter"],
+    "ASI / DCI Core Router": ["asi", "dci", "core"],
+    "Fedline Router": ["fedline", "frb", "federal reserve", "fed line"]
+  },
+
+  "content_filter_exempt_zones": ["WAN", "VPN", "SSLVPN", "MULTICAST", "MGMT"]
+}

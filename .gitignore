@@ -1,0 +1,9 @@
+# Client firewall data — never commit (EXP exports, decoded configs, reports)
+data/
+input/
+output/
+
+# Python / macOS
+__pycache__/
+*.pyc
+.DS_Store
