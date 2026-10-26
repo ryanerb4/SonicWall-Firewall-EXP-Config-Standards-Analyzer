@@ -1,4 +1,4 @@
-# SonicWall Firewall EXP Config Standards Analyzer
+# SonicWall EXP Comparison & Audit
 
 Compares multiple SonicWall EXP config exports (same client) for **content
 filtering**, **IPS/IDS**, **VLAN inter-communication**, and **management access
