@@ -14,8 +14,8 @@ one is busy — the exact URL is printed):
   dates. Click an analysis to reopen its reports; delete removes it.
 - **New Analysis wizard** — name the analysis, drag & drop the EXP `.zip`
   files (10+ supported), click Process.
-- **Report screen** — Differences shown first; left menu switches to
-  Compliance, Findings, and **Remediation tickets**. Each ticket item lists the
+- **Report screen** — Remediation summary shown first; left menu switches to
+  Differences, Compliance, Findings, and **Remediation tickets**. Each ticket item lists the
   explicit offending rules / missing categories / missing countries, plus a
   plain-English **Why** and the **standard failing** (PCI DSS, NIST 800-53, CIS
   Controls, FFIEC), and a "Copy ticket text" button that copies the full
@@ -38,6 +38,8 @@ SQLite DB, reports). Everything stays local.
      and cross-firewall **consistency exceptions**.
    - **differences.html** — what differs between the firewalls.
    - **findings.html** — risky/loose rules, open ports, content filter, geo.
+   - **summary.html** — remediation at a glance: task counts per firewall,
+     fix matrix (shared vs. one-off fixes), compact task list.
    - **remediation.html** — per-firewall ticket-ready fix lists.
 
 Compliance rules live in **`compliance_rules.json`** — edit it to change the
@@ -52,12 +54,15 @@ Everything runs locally. No data leaves this folder.
 3. SSH management enabled & limited to a single IP
 4. External (WAN) management limited to 1–2 IPs
 5. Internal management limited to 1–2 IPs
-6. VPN authentication via AD/Entra + MFA (DUO)
+6. VPN authentication via AD/Entra + MFA (DUO, Entra, or SonicOS one-time
+   passwords on the VPN user group; plain RADIUS = verify)
 
 ## Report sections
 **findings.html** (per firewall): checklist (traffic-light pills) · risk
 findings · **Open ports & IP restrictions** (EXTERNAL from Internet + INTERNAL
-firewall management, each row flagged green/orange/red) · VPN Authentication &
+firewall management, each row flagged green/orange/red) · **Port forwards
+(inbound NAT)** (port, inbound interface, public IP, internal target, source
+restriction — or "no port forwards") · VPN Authentication &
 MFA · VPN & security licenses · Access INTO / FROM trusted LAN · **Content
 filter blocked categories** · **Geo-IP blocked countries** · expected VLAN role
 coverage.
@@ -90,7 +95,8 @@ Spot-check against the firewall UI (Security Services → Geo-IP Filter).
 - `data/sonicwall.db` — SQLite of parsed zones / interfaces / mgmt rules
 
 ## Tuning
-- Expected VLAN roles: `VLAN_ROLES` in `sonicwall_compare.py`
+- Expected VLAN roles (suggested VLAN plan — id, role, purpose, match patterns,
+  segmentation): `expected_vlan_roles` in `compliance_rules.json`
 - Zones exempt from the content-filter check: `NON_CFS_ZONES`
 
 ## Notes / limitations

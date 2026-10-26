@@ -1,66 +1,257 @@
 {
   "_about": "Compliance rules for the SonicWall EXP audit. Edit these values to match client policy; sonicwall_compare.py reads this file at runtime.",
-
   "trusted_zone": "LAN",
   "_trusted_zone_note": "The main internal / trusted network. All inter-VLAN access is judged relative to this zone.",
-
-  "trusted_zones": ["LAN", "SSLVPN"],
+  "trusted_zones": [
+    "LAN",
+    "SSLVPN"
+  ],
   "_trusted_zones_note": "Zones treated as trusted user networks alongside the LAN. SSL VPN remote users land in SSLVPN and legitimately need to reach LAN servers/resources, so SSLVPN->LAN is allowed and NOT flagged. Any zone NOT in this list that reaches the LAN is a red flag. Management access is governed separately by management.admin_allowed_zones (LAN only) — being a trusted DATA zone does not grant firewall-management access.",
-
-  "vpn_user_zones": ["SSLVPN"],
+  "vpn_user_zones": [
+    "SSLVPN"
+  ],
   "_vpn_user_zones_note": "Zones holding remote-access VPN USERS. Two rules apply: (1) VPN user-to-user traffic must be blocked (intra-zone communication off) to stop lateral movement between remote sessions; (2) the LAN must NOT initiate connections TO these zones (LAN->SSLVPN blocked) — remote users reach LAN servers, not the other way around.",
-
   "lan_requirements": {
     "content_filter_required": true,
     "ips_required": true,
     "no_inbound_from_other_zones": true,
     "_note": "Content filtering and IPS/IDS are REQUIRED on the trusted LAN. Any VLAN/zone/interface allowed to talk INTO the LAN is a red flag."
   },
-
   "ssh": {
     "must_be_enabled": true,
-    "allowed_zones": ["LAN"],
+    "allowed_zones": [
+      "LAN"
+    ],
     "max_source_ips": 2,
     "_note": "SSH management must be enabled, may ONLY be reachable from the LAN zone, and must be restricted to at most 2 source IPs."
   },
-
   "management": {
     "max_source_ips": 2,
-    "admin_allowed_zones": ["LAN"],
+    "admin_allowed_zones": [
+      "LAN"
+    ],
     "admin_source_object": "Mgmt-Jumpbox",
     "admin_source_description": "the jumpbox that runs the Connect Secure agent",
+    "external_mgmt_source": "RT Datacenter",
+    "external_mgmt_legacy_names": [
+      "GMS Addresses"
+    ],
+    "_external_mgmt_note": "Management rules whose Source is this address object/group are the sanctioned external (datacenter) management path — KEEP them; they are not flagged as off-zone. If the object still carries a legacy name (e.g. the SonicWall default 'GMS Addresses' group), the fix is to RENAME it to external_mgmt_source, not to delete the rule.",
     "unrestricted_access_is_red_flag": true,
     "_note": "The admin interface (HTTPS/HTTP/SNMP) and SSH may ONLY be reachable from the LAN zone, and must be IP-restricted to at most max_source_ips. Every other zone — VPN, WAN, and all other VLANs — must be denied management access. To also permit IP-restricted WAN/GMS management, add \"WAN\" to admin_allowed_zones. Unrestricted (Any-source) management access is a red flag."
   },
-
+  "nsm": {
+    "required": true,
+    "_note": "The fleet is managed centrally by NSM from the RT Datacenter. Each firewall must have the GMS/NSM management channel enabled (gmsServerEnable=on) AND a management access rule whose Source is management.external_mgmt_source (or one of its legacy names). Set required to false to skip this rule."
+  },
   "vpn": {
     "sslvpn_requires_mfa": true,
-    "accepted_mfa": ["DUO", "Entra"],
-    "accepted_directory": ["Active Directory", "LDAP", "Entra"],
+    "accepted_mfa": [
+      "DUO",
+      "Entra",
+      "TOTP",
+      "Email OTP"
+    ],
+    "mfa_radius_servers": [],
+    "_mfa_note": "Any of accepted_mfa satisfies the SSL VPN MFA rule: DUO (named in the config), Entra (SAML), TOTP / Email OTP (SonicOS one-time passwords on the VPN user group). A RADIUS login server is only counted as MFA if its IP is listed in mfa_radius_servers (e.g. the DUO Authentication Proxy); otherwise RADIUS login yields WARN 'verify', never a FAIL.",
+    "accepted_directory": [
+      "Active Directory",
+      "LDAP",
+      "Entra"
+    ],
     "_note": "If SSL VPN is configured, DUO or Entra (SAML) MFA is REQUIRED. Directory should be AD/LDAP or Entra."
   },
-
   "external_services": {
     "wan_inbound_any_source_is_red_flag": true,
-    "expected_open_listeners": ["IKE", "SSL VPN", "SSLVPN", "SonicpointN", "NAT-T"],
+    "expected_open_listeners": [
+      "IKE",
+      "SSL VPN",
+      "SSLVPN",
+      "SonicpointN",
+      "NAT-T"
+    ],
     "_note": "WAN-inbound services open to any source are red flags, except expected VPN listeners which must accept any remote IP."
   },
-
   "consistency": {
     "geo_blocking_match_strictest": true,
     "content_filter_match_strictest": true,
     "_note": "Across all firewalls for one client, geo-blocking and blocked content-filter categories must match. If one firewall blocks something, they all must. The STRICTEST firewall (union of everything blocked) is the baseline; anything missing on a peer is an exception."
   },
-
-  "expected_vlan_roles": {
-    "Printers": ["print"],
-    "Phones": ["phone", "voip", "voice"],
-    "ATM": ["atm"],
-    "Camera": ["camera", "cctv", "nvr", "dvr", "surveil"],
-    "IOT / HVAC / Postage": ["iot", "hvac", "postage", "pitney", "meter"],
-    "ASI / DCI Core Router": ["asi", "dci", "core"],
-    "Fedline Router": ["fedline", "frb", "federal reserve", "fed line"]
-  },
-
-  "content_filter_exempt_zones": ["WAN", "VPN", "SSLVPN", "MULTICAST", "MGMT"]
+  "_expected_vlan_roles_note": "Suggested VLAN plan the audit checks every firewall against. Each entry: vlan (suggested ID, null = no suggested ID), role, purpose, match (case-insensitive substrings looked for in the VLAN sub-interface name + comment), optional exclude (substrings that disqualify a match), segmentation (recommended access policy shown in the reports). A configured VLAN that matches no role is listed for naming/classification; an unnamed VLAN whose ID equals a suggested ID is hinted to that role.",
+  "expected_vlan_roles": [
+    {
+      "vlan": 10,
+      "role": "Management",
+      "purpose": "Firewalls, switches, APs, mgmt interfaces",
+      "match": [
+        "mgmt",
+        "management",
+        "infra"
+      ],
+      "segmentation": "Most restricted. Permit only from admin/jump box; deny from User, Guest, IoT. No inbound internet; outbound to vendor update sources only."
+    },
+    {
+      "vlan": 20,
+      "role": "Servers",
+      "purpose": "On-prem physical & virtual servers",
+      "match": [
+        "server",
+        "srv"
+      ],
+      "segmentation": "Allow only required ports from User VLAN. No inbound from Guest/IoT. No direct inbound internet; publish externally via reverse proxy / DMZ."
+    },
+    {
+      "vlan": 30,
+      "role": "Workstations / Users",
+      "purpose": "Corporate endpoints, laptops",
+      "match": [
+        "user",
+        "workstation",
+        "staff",
+        "corp",
+        "employee",
+        "desktop",
+        "data"
+      ],
+      "exclude": [
+        "wifi",
+        "wi-fi",
+        "wireless",
+        "wlan",
+        "guest"
+      ],
+      "segmentation": "Internet allowed. Reach Servers on required ports only. Deny lateral access to Mgmt, CCTV, and IoT."
+    },
+    {
+      "vlan": 40,
+      "role": "VoIP / Phones",
+      "purpose": "IP phones, PBX, SIP gateways",
+      "match": [
+        "phone",
+        "voip",
+        "voice",
+        "sip",
+        "pbx"
+      ],
+      "segmentation": "Isolate with QoS. Permit only SIP/RTP to PBX/provider. No general internet; deny access to data VLANs."
+    },
+    {
+      "vlan": 50,
+      "role": "Printers / MFP",
+      "purpose": "Printers, copiers, scanners",
+      "match": [
+        "print",
+        "mfp",
+        "copier"
+      ],
+      "segmentation": "Allow print/scan from User VLAN only. Block internet (allow vendor cloud-print if required). Deny inbound from Guest/IoT."
+    },
+    {
+      "vlan": 60,
+      "role": "Wireless — Corporate",
+      "purpose": "Trusted staff Wi-Fi",
+      "match": [
+        "wifi",
+        "wi-fi",
+        "wireless",
+        "wlan"
+      ],
+      "exclude": [
+        "guest",
+        "visitor",
+        "public"
+      ],
+      "segmentation": "Treat as trusted user VLAN. 802.1X or strong PSK. Same server access policy as wired users."
+    },
+    {
+      "vlan": 70,
+      "role": "Guest Wi-Fi",
+      "purpose": "Visitor / untrusted Wi-Fi",
+      "match": [
+        "guest",
+        "visitor"
+      ],
+      "segmentation": "Internet-only. Enable client isolation. Password protected. Deny all access to internal VLANs."
+    },
+    {
+      "vlan": 80,
+      "role": "IoT / BYOD",
+      "purpose": "Smart devices, thermostats, BYOD (incl. HVAC, postage meters)",
+      "match": [
+        "iot",
+        "byod",
+        "hvac",
+        "postage",
+        "pitney",
+        "meter",
+        "thermostat",
+        "smart"
+      ],
+      "segmentation": "Isolate from corporate. Internet limited to required cloud endpoints. Deny access to Servers, Mgmt, Workstations."
+    },
+    {
+      "vlan": 90,
+      "role": "Security / CCTV",
+      "purpose": "NVR, IP cameras, access control",
+      "match": [
+        "camera",
+        "cctv",
+        "nvr",
+        "dvr",
+        "surveil",
+        "security",
+        "access control"
+      ],
+      "segmentation": "Isolate NVR and cameras. No internet (or vendor-only). Management access from Mgmt/admin VLAN only."
+    },
+    {
+      "vlan": 100,
+      "role": "DMZ",
+      "purpose": "Public-facing / published services",
+      "match": [
+        "dmz",
+        "published"
+      ],
+      "segmentation": "Strict firewall both directions. Deny initiation into internal VLANs; internal reaches DMZ on required ports only."
+    },
+    {
+      "vlan": null,
+      "role": "ATM",
+      "purpose": "ATM network (bank-specific, no suggested ID)",
+      "match": [
+        "atm"
+      ],
+      "segmentation": "Isolate; permit only the ATM-to-processor traffic. Deny access to all other VLANs."
+    },
+    {
+      "vlan": null,
+      "role": "ASI / DCI Core Router",
+      "purpose": "Core-banking router (bank-specific, no suggested ID)",
+      "match": [
+        "asi",
+        "dci",
+        "core"
+      ],
+      "segmentation": "Permit only the core-banking application ports from Servers/Users. Deny from Guest, IoT and Wi-Fi."
+    },
+    {
+      "vlan": null,
+      "role": "Fedline Router",
+      "purpose": "Federal Reserve FedLine router (bank-specific, no suggested ID)",
+      "match": [
+        "fedline",
+        "frb",
+        "federal reserve",
+        "fed line"
+      ],
+      "segmentation": "Isolate; permit only the designated FedLine workstation(s). No other VLAN access."
+    }
+  ],
+  "content_filter_exempt_zones": [
+    "WAN",
+    "VPN",
+    "SSLVPN",
+    "MULTICAST",
+    "MGMT"
+  ]
 }

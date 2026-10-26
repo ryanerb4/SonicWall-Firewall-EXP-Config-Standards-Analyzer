@@ -11,7 +11,7 @@ What it does:
   processed date for each analysis.
 - "New Analysis" wizard: name the analysis, drag & drop the EXP .zip files
   (10+ supported), press Process.
-- Report screen: shows the Differences report first, with a left-hand menu
+- Report screen: shows the Remediation summary first, with a left-hand menu
   for Compliance, Findings, and Remediation tickets.
 
 Everything stays local: uploads, decoded configs, per-analysis SQLite DBs and
@@ -36,8 +36,11 @@ HOST = "127.0.0.1"
 PORTS = range(8765, 8790)
 APP_DB = os.path.join("data", "app.db")
 ANALYSES_DIR = os.path.join("data", "analyses")
+SETTINGS_FILE = os.path.join("data", "settings.json")
 # key, label, one-line description (shown as numbered audit steps)
 REPORTS = [
+    ("summary", "Remediation summary",
+     "Every fix per firewall at a glance — counts & shared fixes"),
     ("differences", "Differences",
      "What differs between the firewalls, side by side"),
     ("compliance", "Compliance",
@@ -68,6 +71,45 @@ def db():
 
 
 # ---------------------------------------------------------------------------
+# Settings / branding
+# ---------------------------------------------------------------------------
+def load_settings():
+    try:
+        with open(SETTINGS_FILE) as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+def save_settings(s):
+    os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
+    with open(SETTINGS_FILE, "w") as fh:
+        json.dump(s, fh)
+
+
+def brand():
+    """Branding with defaults: {name, url, logo (data: URI or '')}."""
+    b = load_settings().get("branding", {})
+    return {"name": (b.get("name") or "").strip() or "AuditHat.com",
+            "url": (b.get("url") or "").strip(),
+            "logo": b.get("logo") or ""}
+
+
+def apply_report_branding(doc):
+    """Swap the AUDITHAT.COM wordmark in a stored report's header for the
+    configured company name/logo — done at serve time so it applies to
+    every report, past and future, without a re-run."""
+    b = brand()
+    if b["name"] == "AuditHat.com" and not b["logo"]:
+        return doc
+    rep = esc(b["name"]).upper()
+    if b["logo"]:
+        rep = (f"<img src='{esc(b['logo'])}' style='max-height:36px;"
+               f"display:block;margin-bottom:8px'>" + rep)
+    return doc.replace("AUDITHAT.COM", rep, 1)
+
+
+# ---------------------------------------------------------------------------
 # Shared page chrome
 # ---------------------------------------------------------------------------
 APP_CSS = """
@@ -95,7 +137,20 @@ a{color:#0b5cad}
 .bar{display:flex;gap:12px;margin-bottom:18px;align-items:center}
 .bar input{flex:1;padding:10px 12px;border:1px solid #cdd5dd;border-radius:6px;
            font-size:14px}
-.del{background:none;border:0;color:#c0392b;cursor:pointer;font-size:12px}
+.act{display:flex;gap:4px;justify-content:flex-end;white-space:nowrap}
+td.acts{width:1%}
+.ico{background:none;border:0;padding:5px;border-radius:5px;cursor:pointer;
+     color:#5a6b7c;display:inline-flex;align-items:center;line-height:0}
+.ico svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;
+         stroke-linecap:round;stroke-linejoin:round}
+.ico:hover{background:#e8eef5;color:#0b5cad}
+.ico.del:hover{background:#fdeeec;color:#c0392b}
+.ico[disabled]{opacity:.4;cursor:default}
+.ren{display:flex;gap:4px;align-items:center}
+#hist th:first-child{width:30%}
+.ren input[type=text]{flex:1;width:100%;min-width:0;padding:5px 8px;
+                      font-size:13px;border-radius:5px}
+.ren .err{color:#c0392b;font-size:12px;margin-left:4px}
 .muted{color:#7a8794}
 #drop{border:2px dashed #9db2c6;border-radius:10px;padding:46px 20px;
       text-align:center;color:#5a6b7c;background:#fff;cursor:pointer;
@@ -163,10 +218,16 @@ iframe{flex:1;border:0;background:#f6f7f9}
 
 
 def page(title, body, header_extra=""):
+    b = brand()
+    logo = (f"<img src='{esc(b['logo'])}' style='height:28px;"
+            f"align-self:center'>" if b["logo"] else "")
+    spacer = "" if "flex:1" in header_extra else "<span style='flex:1'></span>"
+    gear = ("<a href='/settings' title='Settings' "
+            "style='font-size:17px'>&#9881;</a>")
     return (f"<!doctype html><meta charset='utf-8'><title>{esc(title)}</title>"
-            f"{APP_CSS}<header><h1>AuditHat.com</h1>"
+            f"{APP_CSS}<header>{logo}<h1>{esc(b['name'])}</h1>"
             f"<span class='sub'>SonicWall EXP Audit</span>"
-            f"{header_extra}</header>{body}")
+            f"{header_extra}{spacer}{gear}</header>{body}")
 
 
 # ---------------------------------------------------------------------------
@@ -198,6 +259,9 @@ def _standards_content():
     max_ips = mgmt.get("max_source_ips", 2)
     jb = mgmt.get("admin_source_object", "Mgmt-Jumpbox")
     admin_zones = "/".join(mgmt.get("admin_allowed_zones", ["LAN"]))
+    dc = mgmt.get("external_mgmt_source", "RT Datacenter")
+    dc_legacy = " / ".join(mgmt.get("external_mgmt_legacy_names",
+                                    ["GMS Addresses"]))
     ssh = r.get("ssh", {})
     ssh_zones = "/".join(ssh.get("allowed_zones", ["LAN"]))
     ssh_max = ssh.get("max_source_ips", 2)
@@ -205,10 +269,18 @@ def _standards_content():
     trusted = ", ".join(r.get("trusted_zones", ["LAN", "SSLVPN"]))
     vuz = ", ".join(r.get("vpn_user_zones", ["SSLVPN"]))
     mfa = " or ".join(vpn.get("accepted_mfa", ["DUO", "Entra"]))
-    vlans = r.get("expected_vlan_roles", {})
-    vlan_list = ", ".join(vlans.keys()) if vlans else (
-        "Printers, Phones, ATM, Camera, IOT/HVAC/Postage, "
-        "ASI/DCI Core Router, Fedline Router")
+    vlans = r.get("expected_vlan_roles") or []
+    if isinstance(vlans, dict):                      # legacy {role: [...]}
+        vlans = [{"role": k} for k in vlans]
+    vlan_lines = []
+    for e in vlans:
+        vid = f"VLAN {e['vlan']} &nbsp;" if e.get("vlan") is not None else ""
+        txt = f"{vid}<b>{esc(e['role'])}</b>"
+        if e.get("purpose"):
+            txt += f" — {esc(e['purpose'])}"
+        if e.get("segmentation"):
+            txt += f"<br><small>{esc(e['segmentation'])}</small>"
+        vlan_lines.append((txt, "Client VLAN segmentation standard"))
 
     N53 = "NIST SP 800-53"
     # (category-title, [ (requirement_html, standard_ref), ... ])
@@ -227,9 +299,16 @@ def _standards_content():
              f"{N53} AC-6, SC-7; CIS Control 12; PCI DSS 1.3"),
             ("Cleartext <b>HTTP</b> management must be disabled — HTTPS only.",
              f"{N53} SC-8; PCI DSS 2.2.7; CIS Control 4"),
-            ("Legacy <b>GMS</b> must not be configured — the fleet is managed "
-             "by <b>NSM</b>.",
+            (f"<b>NSM management</b> must be implemented — the GMS/NSM "
+             f"management channel enabled and firewall management allowed "
+             f"from the <b>{esc(dc)}</b> (NSM) addresses. The fleet is managed "
+             "centrally by NSM.",
              f"{N53} CM-6, CM-7; CIS Control 4; client NSM standard"),
+            (f"Management from outside the LAN is permitted only from the "
+             f"<b>{esc(dc)}</b> address object. Those rules are <b>kept</b>; "
+             f"a legacy <b>{esc(dc_legacy)}</b> group must be renamed to "
+             f"<b>{esc(dc)}</b>, not deleted.",
+             f"{N53} CM-6, SC-7; CIS Control 4, 12; client management standard"),
         ],
         "Threat Protection — IPS & Content Filtering": [
             (f"<b>IPS/IDS</b> (Intrusion Prevention) must be enabled globally "
@@ -247,8 +326,7 @@ def _standards_content():
              f"zones (<b>{trusted}</b>) may reach it. Any other VLAN/zone into "
              f"the {tz} is a red flag.",
              "PCI DSS 1.3, 1.4; " + N53 + " SC-7; CIS Control 12; FFIEC"),
-            (f"Expected VLANs to inventory: <b>{vlan_list}</b>.",
-             "Client asset/segmentation standard"),
+            *vlan_lines,
         ],
         "VPN & Remote Access": [
             ("VPN authentication must integrate with <b>Active Directory / "
@@ -312,6 +390,58 @@ def standards_page():
 # ---------------------------------------------------------------------------
 # Pages
 # ---------------------------------------------------------------------------
+ICO_PENCIL = ("<svg viewBox='0 0 24 24'><path d='M17 3a2.83 2.83 0 1 1 4 4"
+              "L7.5 20.5 2 22l1.5-5.5L17 3z'/></svg>")
+ICO_TRASH = ("<svg viewBox='0 0 24 24'><polyline points='3 6 5 6 21 6'/>"
+             "<path d='M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6'/>"
+             "<path d='M10 11v6M14 11v6'/>"
+             "<path d='M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2'/></svg>")
+ICO_CHECK = "<svg viewBox='0 0 24 24'><polyline points='20 6 9 17 4 12'/></svg>"
+ICO_X = ("<svg viewBox='0 0 24 24'><line x1='18' y1='6' x2='6' y2='18'/>"
+         "<line x1='6' y1='6' x2='18' y2='18'/></svg>")
+
+HOME_JS = """
+function flt(){var q=document.getElementById('q').value.toLowerCase();
+document.querySelectorAll('#hist tr[data-s]').forEach(function(r){
+r.style.display=r.dataset.s.indexOf(q)>=0?'':'none';});}
+function delA(id){if(!confirm('Delete this analysis and its reports?'))return;
+fetch('/api/delete/'+id,{method:'POST'}).then(function(){location.reload();});}
+function renA(id){
+  var a=document.getElementById('nm'+id); if(!a)return;
+  var td=a.parentNode, tr=td.parentNode, old=a.textContent;
+  var box=document.createElement('div'); box.className='ren';
+  box.innerHTML="<input type='text' maxlength='120' aria-label='Analysis name'>"
+    +"<button class='ico' title='Save (Enter)'>"+ICO_CHECK+"</button>"
+    +"<button class='ico' title='Cancel (Esc)'>"+ICO_X+"</button>"
+    +"<span class='err'></span>";
+  var inp=box.querySelector('input'), btns=box.querySelectorAll('button'),
+      err=box.querySelector('.err');
+  inp.value=old;
+  function done(){td.innerHTML='';td.appendChild(a);}
+  function save(){
+    var v=inp.value.trim();
+    if(!v||v===old){done();return;}
+    btns[0].disabled=true; err.textContent='';
+    fetch('/api/rename/'+id,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:v})})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      if(j.error){err.textContent=j.error;btns[0].disabled=false;return;}
+      a.textContent=j.name;
+      tr.dataset.s=(j.name+' '+(tr.dataset.rest||'')).toLowerCase();
+      done();})
+    .catch(function(){err.textContent='Rename failed';btns[0].disabled=false;});
+  }
+  btns[0].onclick=save; btns[1].onclick=done;
+  inp.onkeydown=function(e){
+    if(e.key==='Enter'){e.preventDefault();save();}
+    else if(e.key==='Escape'){done();}};
+  td.innerHTML=''; td.appendChild(box); inp.focus(); inp.select();
+}
+"""
+
+
 def home_page():
     conn = db()
     rows = conn.execute(
@@ -321,14 +451,19 @@ def home_page():
     trs = []
     for rid, name, ts, nf, fws in rows:
         fws = fws or ""
-        search = esc((name + " " + fws + " " + (ts or "")).lower(), quote=True)
+        rest = esc((fws + " " + (ts or "")).lower(), quote=True)
+        search = esc(name.lower(), quote=True) + " " + rest
         trs.append(
-            f"<tr data-s=\"{search}\">"
-            f"<td><a href='/analysis/{rid}'>{esc(name)}</a></td>"
+            f"<tr data-s=\"{search}\" data-rest=\"{rest}\">"
+            f"<td><a href='/analysis/{rid}' id='nm{rid}'>{esc(name)}</a></td>"
             f"<td>{esc(ts or '—')}</td><td>{nf or 0}</td>"
             f"<td class='muted'>{esc(fws)}</td>"
-            f"<td><button class='del' onclick='delA({rid})'>delete</button>"
-            "</td></tr>")
+            f"<td class='acts'><div class='act'>"
+            f"<button class='ico' title='Rename' aria-label='Rename' "
+            f"onclick='renA({rid})'>{ICO_PENCIL}</button>"
+            f"<button class='ico del' title='Delete' aria-label='Delete' "
+            f"onclick='delA({rid})'>{ICO_TRASH}</button>"
+            "</div></td></tr>")
     if not trs:
         trs.append("<tr><td colspan='5' class='muted'>No analyses yet — "
                    "click <b>New Analysis</b> to start.</td></tr>")
@@ -355,13 +490,10 @@ def home_page():
 </table>
 </main>
 <script>
-function flt(){{var q=document.getElementById('q').value.toLowerCase();
-document.querySelectorAll('#hist tr[data-s]').forEach(function(r){{
-r.style.display=r.dataset.s.indexOf(q)>=0?'':'none';}});}}
-function delA(id){{if(!confirm('Delete this analysis and its reports?'))return;
-fetch('/api/delete/'+id,{{method:'POST'}}).then(function(){{location.reload();}});}}
+var ICO_CHECK={json.dumps(ICO_CHECK)}, ICO_X={json.dumps(ICO_X)};
+{HOME_JS}
 </script>"""
-    return page("AuditHat.com — SonicWall EXP Audit", body,
+    return page(f"{brand()['name']} — SonicWall EXP Audit", body,
                 "<span class='sub'>Analysis history</span>")
 
 
@@ -442,6 +574,105 @@ def _date_str(ts):
     return dt.strftime("%b-%d-%Y")
 
 
+def settings_page():
+    b = brand()
+    logo_prev = (f"<img id='logoImg' src='{esc(b['logo'])}' "
+                 f"style='max-height:60px;display:block'>" if b["logo"]
+                 else "<img id='logoImg' style='max-height:60px;"
+                      "display:none'>")
+    none_note = ("" if b["logo"] else
+                 "<span id='noLogo' class='muted'>No logo uploaded.</span>")
+    body = f"""
+<main style='max-width:660px'>
+<h2 style='margin-top:0'>Settings</h2>
+<div style='background:#fff;border:1px solid #e2e6ea;border-radius:10px;
+     padding:20px 22px'>
+<h3 style='margin:0 0 4px;font-size:15px'>Branding</h3>
+<p class='muted' style='margin:0 0 10px;font-size:13px'>Shown in place of
+AuditHat.com across the app, on every report, and on the printed PDF title
+page. Applies immediately — no re-run needed.</p>
+<label for='bname'>Company name</label>
+<input type='text' id='bname' value="{esc(b['name'])}"
+       placeholder='AuditHat.com'>
+<label for='burl'>Company URL</label>
+<input type='text' id='burl' value="{esc(b['url'])}"
+       placeholder='https://example.com'>
+<label>Logo</label>
+<div style='display:flex;gap:14px;align-items:center;min-height:32px'>
+{logo_prev}{none_note}
+</div>
+<div class='bar' style='margin:12px 0 6px'>
+<button class='btn' id='pick' style='padding:8px 14px;font-size:13px'>
+Upload logo&hellip;</button>
+<button class='del' id='rm'>remove logo</button>
+</div>
+<small>PNG, JPG, SVG or GIF, up to 2&nbsp;MB — automatically converted to
+WebP and sized for print on upload. Shown next to the company name in
+headers and large on the PDF title page.</small>
+</div>
+<div class='bar' style='margin-top:18px'>
+<span id='status' class='muted'></span>
+<span style='flex:1'></span>
+<a href='/' style='margin-right:14px'>back</a>
+<button class='btn' id='save'>Save settings</button>
+</div>
+</main>
+<script>
+var logoVal=null; /* null = keep current, '' = remove, 'data:...' = new */
+var picker=document.createElement('input');
+picker.type='file';picker.accept='image/*';
+document.getElementById('pick').addEventListener('click',function(e){{
+e.preventDefault();picker.click();}});
+/* re-encode as WebP, capped at 1200x600 (plenty for the print cover);
+   falls back to the original data if the browser can't encode WebP */
+function toWebp(src,cb){{
+var img=new Image();
+img.onload=function(){{
+try{{
+var w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
+if(!w||!h){{cb(src);return;}}
+var sc=Math.min(1,1200/w,600/h);
+var c=document.createElement('canvas');
+c.width=Math.round(w*sc);c.height=Math.round(h*sc);
+c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+var out=c.toDataURL('image/webp',0.9);
+cb(out.indexOf('data:image/webp')===0?out:src);
+}}catch(e){{cb(src);}}
+}};
+img.onerror=function(){{cb(src);}};
+img.src=src;
+}}
+picker.addEventListener('change',function(){{
+var f=picker.files[0];if(!f)return;
+if(f.size>2*1024*1024){{alert('Logo must be 2 MB or smaller.');return;}}
+var r=new FileReader();
+r.onload=function(){{toWebp(r.result,function(out){{logoVal=out;
+var im=document.getElementById('logoImg');
+im.src=logoVal;im.style.display='block';
+var n=document.getElementById('noLogo');if(n)n.style.display='none';}});}};
+r.readAsDataURL(f);picker.value='';}});
+document.getElementById('rm').addEventListener('click',function(e){{
+e.preventDefault();logoVal='';
+document.getElementById('logoImg').style.display='none';
+var n=document.getElementById('noLogo');if(n)n.style.display='';}});
+document.getElementById('save').addEventListener('click',function(){{
+var p={{name:document.getElementById('bname').value,
+url:document.getElementById('burl').value}};
+if(logoVal!==null){{p.logo=logoVal;}}
+var btn=this;btn.disabled=true;
+fetch('/api/settings',{{method:'POST',
+headers:{{'Content-Type':'application/json'}},body:JSON.stringify(p)}})
+.then(function(r){{return r.json();}}).then(function(j){{
+btn.disabled=false;
+if(j.ok){{document.getElementById('status').textContent='Saved.';
+setTimeout(function(){{location.reload();}},400);}}
+else{{alert('Error: '+(j.error||'unknown'));}}
+}}).catch(function(e){{btn.disabled=false;alert('Error: '+e);}});
+}});
+</script>"""
+    return page("Settings", body, "<span class='sub'>Settings</span>")
+
+
 def shell_page(rid):
     conn = db()
     row = conn.execute(
@@ -470,12 +701,15 @@ def shell_page(rid):
                f"<span style='flex:1'></span>"
                f"<button class='btn' id='printr' style='padding:7px 14px;"
                f"font-size:13px'>&#128424; Print report</button>"
+               f"<a class='btn' href='/analysis/{rid}/export.html' download "
+               f"style='padding:7px 14px;font-size:13px'>&#11015; Export as "
+               f"HTML</a>"
                f"<button class='btn' id='rerun' style='padding:7px 14px;"
                f"font-size:13px'>&#8635; Re-run report</button></div>")
 
     steps = ""
     for i, (t, lbl, desc) in enumerate(REPORTS, 1):
-        active = " active" if t == "differences" else ""
+        active = " active" if t == REPORTS[0][0] else ""
         steps += (f"<a href='#' class='step{active}' data-t='{t}'>"
                   f"<span class='num'>{i}</span>"
                   f"<span class='txt'><b>{esc(lbl)}</b>"
@@ -487,7 +721,7 @@ def shell_page(rid):
 <div class='layout'>
 <nav><div class='navhead'>Audit steps</div>{steps}
 <a class='home' href='/'>&larr; All analyses</a></nav>
-<iframe id='fr' src='/analysis/{rid}/report/differences'></iframe>
+<iframe id='fr' src='/analysis/{rid}/report/{REPORTS[0][0]}'></iframe>
 </div>
 <script>
 document.querySelectorAll('a.step').forEach(function(a){{
@@ -533,6 +767,10 @@ REPORT_SUMMARIES = {
     "findings":
         "Risky and loose firewall rules, externally open ports, and "
         "content-filter &amp; Geo-IP gaps found on each firewall.",
+    "summary":
+        "An at-a-glance overview of the remediation work — task counts per "
+        "firewall, which fixes are shared across the fleet, and a compact "
+        "task list per firewall.",
     "remediation":
         "Per-firewall remediation tickets — the concrete tasks, steps and "
         "options to bring each firewall up to standard.",
@@ -555,7 +793,12 @@ def with_print_cover(doc, rid, key):
     ts = ts or "—"
     lbl = next((l for k, l, _ in REPORTS if k == key), key.title())
     summary = REPORT_SUMMARIES.get(key, "")
-    js_title = json.dumps(f"AuditHat - {name} - {lbl} - {_date_str(ts)}")
+    b = brand()
+    js_title = json.dumps(f"{b['name']} - {name} - {lbl} - {_date_str(ts)}")
+    logo_img = (f"<img src='{esc(b['logo'])}' style='max-height:150px;"
+                f"max-width:480px;margin-bottom:26px'>" if b["logo"] else "")
+    url_line = (f"<div style='font-size:13px;color:#7a8794;margin-top:6px'>"
+                f"{esc(b['url'])}</div>" if b["url"] else "")
     fw_line = (f"<div style='font-size:14px;color:#7a8794;margin-bottom:8px'>"
                f"Firewalls: {esc(fws)}</div>" if fws else "")
     bar = ""
@@ -589,8 +832,9 @@ def with_print_cover(doc, rid, key):
 </style>
 {bar}
 <div id='pdfcover'>
+{logo_img}
 <div style='font-size:14px;letter-spacing:3px;font-weight:700;color:#0b5cad;
-  text-transform:uppercase'>AuditHat.com</div>
+  text-transform:uppercase'>{esc(b['name'])}</div>
 <div style='font-size:36px;font-weight:700;color:#0b2540;margin:16px 0 8px'>
 {esc(name)}</div>
 <div style='font-size:19px;color:#33465a;margin-bottom:18px'>
@@ -599,10 +843,93 @@ Firewall {esc(lbl)} Report</div>
   margin-bottom:26px'>{summary}</div>
 {fw_line}
 <div style='font-size:14px;color:#7a8794'>Processed {esc(ts)}</div>
+{url_line}
 </div>
 <script>function pdfSave(){{document.title={js_title};window.print();}}</script>
 """
     return doc.replace("</style>", "</style>" + inj, 1)
+
+
+def export_page(rid):
+    """The whole analysis as ONE self-contained HTML file that looks exactly
+    like the analysis page: header, summary bar, left 'Audit steps' nav and
+    the report pane. Each report is served the same way the app serves it
+    (branding + print cover applied) and embedded via <iframe srcdoc>, so its
+    own CSS/scripts stay intact. Only the active report's frame is shown.
+    Returns (filename, html) or None if the analysis does not exist."""
+    conn = db()
+    row = conn.execute("SELECT name,processed_at,num_firewalls,firewalls "
+                       "FROM analyses WHERE id=?", (rid,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    name, ts, nf, fws = row
+    b = brand()
+    steps, frames = [], []
+    first = True
+    for i, (key, lbl, desc) in enumerate(REPORTS, 1):
+        p = os.path.join(ANALYSES_DIR, str(rid), "reports", key + ".html")
+        if not os.path.exists(p):
+            continue
+        with open(p, encoding="utf-8") as fh:
+            doc = fh.read()
+        doc = with_print_cover(apply_report_branding(doc), rid, key)
+        active = " active" if first else ""
+        steps.append(f"<a href='#' class='step{active}' data-t='{key}'>"
+                     f"<span class='num'>{i}</span>"
+                     f"<span class='txt'><b>{esc(lbl)}</b>"
+                     f"<small>{esc(desc)}</small></span></a>")
+        frames.append(f"<iframe class='rep{active}' data-t='{key}' "
+                      f"title='{esc(lbl)}' "
+                      f"srcdoc=\"{esc(doc, quote=True)}\"></iframe>")
+        first = False
+    logo = (f"<img src='{esc(b['logo'])}' style='height:28px;"
+            f"align-self:center'>" if b["logo"] else "")
+    fw_chips = "".join(f"<span class='fw'>{esc(f.strip())}</span>"
+                       for f in (fws or "").split(",") if f.strip())
+    exported = datetime.now().strftime("%Y-%m-%d %H:%M")
+    doc = f"""<!doctype html><html><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>{esc(name)} — reports — {_date_str(ts or '')}</title>
+{APP_CSS}
+<style>
+.layout iframe.rep{{display:none}}
+.layout iframe.rep.active{{display:block}}
+</style></head><body>
+<header>{logo}<h1>{esc(b['name'])}</h1>
+<span class='sub'>SonicWall EXP Audit</span><span class='sub'>Audit report</span>
+<span style='flex:1'></span>
+<span class='sub'>Exported {esc(exported)}</span></header>
+<div class='summary'>
+<span class='nm'>{esc(name)}</span>
+<span class='meta'>{nf or 0} firewall(s)</span>{fw_chips}
+<span class='meta'>processed {esc(ts or '—')}</span>
+<span style='flex:1'></span>
+<button class='btn' id='printr' style='padding:7px 14px;font-size:13px'>
+&#128424; Print report</button></div>
+<div class='layout'>
+<nav><div class='navhead'>Audit steps</div>{''.join(steps)}
+<span class='home'>Exported from {esc(b['name'])}</span></nav>
+{''.join(frames)}
+</div>
+<script>
+document.querySelectorAll('a.step').forEach(function(a){{
+a.addEventListener('click',function(e){{e.preventDefault();
+document.querySelectorAll('a.step').forEach(function(x){{
+x.classList.remove('active');}});
+a.classList.add('active');
+document.querySelectorAll('iframe.rep').forEach(function(f){{
+f.classList.toggle('active',f.dataset.t===a.dataset.t);}});}});
+}});
+document.getElementById('printr').addEventListener('click',function(){{
+var f=document.querySelector('iframe.rep.active');if(!f)return;
+var w=f.contentWindow;
+try{{if(w.pdfSave){{w.pdfSave();}}else{{w.focus();w.print();}}}}
+catch(e){{alert('Print failed: '+e);}}
+}});
+</script></body></html>"""
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_.") or "analysis"
+    return f"{safe}-audit-{_date_str(ts or '')}.html", doc
 
 
 # ---------------------------------------------------------------------------
@@ -676,6 +1003,30 @@ def api_analyze(body):
             return 400, {"error": str(e)}
 
 
+def api_settings(body):
+    try:
+        data = json.loads(body)
+    except Exception:
+        return 400, {"error": "bad JSON"}
+    logo = data.get("logo")
+    if logo:
+        if not (logo.startswith("data:image/") and ";base64," in logo[:64]):
+            return 400, {"error": "logo must be an image file"}
+        if len(logo) > 3_000_000:
+            return 400, {"error": "logo too large (2 MB max)"}
+    with _LOCK:
+        s = load_settings()
+        b = s.setdefault("branding", {})
+        if "name" in data:
+            b["name"] = str(data["name"]).strip()[:80]
+        if "url" in data:
+            b["url"] = str(data["url"]).strip()[:200]
+        if logo is not None:
+            b["logo"] = logo
+        save_settings(s)
+    return 200, {"ok": True}
+
+
 def api_rerun(rid):
     """Re-process an analysis's stored EXP files with the current engine
     code and rewrite its reports in place."""
@@ -716,6 +1067,24 @@ def api_rerun(rid):
             return 400, {"error": str(e)}
 
 
+def api_rename(rid, body):
+    try:
+        data = json.loads(body)
+    except Exception:
+        return 400, {"error": "bad JSON"}
+    name = str(data.get("name") or "").strip()[:120]
+    if not name:
+        return 400, {"error": "Name cannot be empty"}
+    conn = db()
+    n = conn.execute("UPDATE analyses SET name=? WHERE id=?",
+                     (name, rid)).rowcount
+    conn.commit()
+    conn.close()
+    if not n:
+        return 404, {"error": "Analysis not found"}
+    return 200, {"ok": True, "name": name}
+
+
 def api_delete(rid):
     shutil.rmtree(os.path.join(ANALYSES_DIR, str(rid)), ignore_errors=True)
     conn = db()
@@ -734,11 +1103,14 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def _send(self, body, code=200, ctype="text/html; charset=utf-8"):
+    def _send(self, body, code=200, ctype="text/html; charset=utf-8",
+              headers=None):
         data = body.encode() if isinstance(body, str) else body
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(data)
 
@@ -764,6 +1136,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(wizard_page())
             if path == "/standards":
                 return self._send(standards_page())
+            if path == "/settings":
+                return self._send(settings_page())
             m = re.fullmatch(r"/analysis/(\d+)", path)
             if m:
                 doc = shell_page(int(m.group(1)))
@@ -771,6 +1145,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send("<h3>Analysis not found. "
                                       "<a href='/'>Home</a></h3>", 404)
                 return self._send(doc)
+            m = re.fullmatch(r"/analysis/(\d+)/export\.html", path)
+            if m:
+                res = export_page(int(m.group(1)))
+                if res is None:
+                    return self._send("<h3>Analysis not found.</h3>", 404)
+                fname, doc = res
+                return self._send(doc, headers={
+                    "Content-Disposition": f'attachment; filename="{fname}"'})
             m = re.fullmatch(r"/analysis/(\d+)/report/([a-z]+)", path)
             if m and m.group(2) in REPORT_KEYS:
                 p = os.path.join(ANALYSES_DIR, m.group(1), "reports",
@@ -778,6 +1160,7 @@ class Handler(BaseHTTPRequestHandler):
                 if os.path.exists(p):
                     with open(p, encoding="utf-8") as fh:
                         doc = fh.read()
+                    doc = apply_report_branding(doc)
                     doc = with_print_cover(doc, int(m.group(1)), m.group(2))
                     return self._send(doc)
                 return self._send("<h3>Report not found.</h3>", 404)
@@ -791,6 +1174,13 @@ class Handler(BaseHTTPRequestHandler):
             body = self._read_body()
             if path == "/api/analyze":
                 code, obj = api_analyze(body)
+                return self._json(obj, code)
+            if path == "/api/settings":
+                code, obj = api_settings(body)
+                return self._json(obj, code)
+            m = re.fullmatch(r"/api/rename/(\d+)", path)
+            if m:
+                code, obj = api_rename(int(m.group(1)), body)
                 return self._json(obj, code)
             m = re.fullmatch(r"/api/delete/(\d+)", path)
             if m:

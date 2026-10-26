@@ -30,7 +30,6 @@ import os
 import re
 import sqlite3
 import sys
-from datetime import datetime
 
 from exp_parser import parse_exp_file, exp_member_name
 
@@ -97,6 +96,10 @@ VLAN_ROLES = {
     "ASI / DCI Core Router":  ["asi", "dci", "core"],
     "Fedline Router":         ["fedline", "frb", "federal reserve", "fed line"],
 }
+
+# Per-role detail from compliance_rules.json (suggested VLAN id, purpose,
+# recommended segmentation, exclude-patterns). Empty for the legacy dict form.
+VLAN_ROLE_INFO = {}
 
 ACTION_NAMES = {"0": "Deny", "1": "Discard", "2": "Allow", "3": "Deny"}
 MGMT_SERVICES = ("SSH Management", "HTTPS Management", "HTTP Management",
@@ -237,10 +240,12 @@ def extract(flat, source_name):
     # Interfaces (VLANs are sub-interfaces with a non-zero vlan_tag)
     for i in _iter_indexed(flat, "iface_name"):
         cfg["interfaces"].append({
+            "idx": i,
             "name": _g(flat, "iface_name", i),
             "comment": _g(flat, "iface_comment", i),
             "vlan": _g(flat, "iface_vlan_tag", i, "0"),
             "parent": _g(flat, "iface_vlan_parent", i),
+            "zone": _g(flat, "interface_Zone", i),
             "ip": _g(flat, "iface_static_ip", i),
             "mask": _g(flat, "iface_static_mask", i),
             "https": _g(flat, "iface_https_mgmt", i),
@@ -272,6 +277,41 @@ def extract(flat, source_name):
     cfg["mgmt_rules"] = [r for r in cfg["rules"]
                          if "Management" in r["service"]]
 
+    # Service objects & groups — to resolve service names to protocol/ports
+    svcs = {}
+    for i in _iter_indexed(flat, "svcObjId"):
+        if _g(flat, "svcObjType", i) == "1":     # 1 = single service
+            svcs[_g(flat, "svcObjId", i)] = {
+                "proto": _g(flat, "svcObjIpType", i),
+                "p1": _g(flat, "svcObjPort1", i),
+                "p2": _g(flat, "svcObjPort2", i),
+            }
+    cfg["_svcs"] = svcs
+    sgroups = {}
+    for i in _iter_indexed(flat, "so_atomToGrp"):
+        mem = _g(flat, "so_atomToGrp", i)
+        grp = _g(flat, "so_grpToGrp", i)
+        if mem and grp:
+            sgroups.setdefault(grp, []).append(mem)
+    cfg["_svc_groups"] = sgroups
+
+    # NAT policies — used to show where WAN-inbound rules actually land
+    cfg["nat"] = []
+    for i in _iter_indexed(flat, "natPolicyEnabled"):
+        cfg["nat"].append({
+            "enabled": _g(flat, "natPolicyEnabled", i),
+            "name": _g(flat, "natPolicyName", i),
+            "src_iface": _g(flat, "natPolicySrcIface", i),
+            "dst_iface": _g(flat, "natPolicyDstIface", i),
+            "trans_src": _g(flat, "natPolicyTransSrc", i),
+            "orig_src": _g(flat, "natPolicyOrigSrc", i),
+            "orig_dst": _g(flat, "natPolicyOrigDst", i),
+            "orig_svc": _g(flat, "natPolicyOrigSvc", i),
+            "trans_dst": _g(flat, "natPolicyTransDst", i),
+            "trans_svc": _g(flat, "natPolicyTransSvc", i),
+            "comment": _g(flat, "natPolicyComment", i),
+        })
+
     # IP groups referenced as a source/destination in access rules, resolved
     referenced = set()
     for r in cfg["rules"]:
@@ -296,11 +336,18 @@ def detect_vpn_auth(flat):
         return str(v).lower() in ("1", "on", "yes", "true", "enabled")
 
     # --- RADIUS user-login auth (DUO Auth Proxy typically rides RADIUS) ---
-    radius_login = truthy(flat.get("userRadiusSelect", ""))
+    radius_sel = str(flat.get("userRadiusSelect", "0") or "0")
+    radius_login = radius_sel not in ("", "0")
     radius_servers = []
-    for k, v in flat.items():
+    for i in range(0, 8):                       # SonicOS 7: radiusSrvrHost_N
+        host = flat.get(f"radiusSrvrHost_{i}", "")
+        if host and host not in ("0.0.0.0", "0") and \
+           truthy(flat.get(f"radiusSrvrIsEnabled_{i}", "on")):
+            radius_servers.append(host)
+    for k, v in flat.items():                   # other builds / spellings
         kl = k.lower()
-        if kl.startswith("snwlradius") or "acct" in kl:      # wireless / accounting
+        if kl.startswith("snwlradius") or "acct" in kl \
+           or kl.startswith("radiussrvrhost"):    # wireless / accounting / done
             continue
         if "radius" in kl and ("serverip" in kl or "hostname" in kl
                                or kl.endswith("host") or kl.endswith("addr")):
@@ -343,36 +390,88 @@ def detect_vpn_auth(flat):
                   or truthy(flat.get("adminObjTotpBindState", ""))
                   or truthy(flat.get("adminOtpReq", "")))
 
+    # --- SonicOS one-time passwords on user groups (built-in VPN MFA) ---
+    otp_modes = {"1": "Email OTP", "2": "TOTP"}
+    otp_groups = []                     # [(group name, mode label)]
+    for i in _iter_indexed(flat, "userGroupObjId"):
+        req = str(flat.get(f"userGroupOtpReq_{i}", "0") or "0")
+        if req != "0":
+            otp_groups.append((flat.get(f"userGroupObjId_{i}") or f"group {i}",
+                               otp_modes.get(req, f"OTP mode {req}")))
+    # groups that gate remote-access VPN logins
+    vpn_otp = [(g, m) for g, m in otp_groups
+               if "vpn" in g.lower().replace(" ", "")
+               or g.lower() in ("everyone", "trusted users")]
+
     # --- VPN service indicators ---
     sslvpn = flat.get("SslvpnsDnsServer1", "0.0.0.0") not in ("0.0.0.0", "")
     l2tp = truthy(flat.get("L2TPServerEnabled", ""))
+    pool_start = flat.get("SslvpnsPPPStartIp", "0.0.0.0")
+    pool_end = flat.get("SslvpnsPPPEndIp", "0.0.0.0")
+    sslvpn_pool = (f"{pool_start} - {pool_end}"
+                   if pool_start not in ("0.0.0.0", "") else "")
 
     # --- derive human summaries ---
+    sel_names = {"1": "RADIUS", "2": "RADIUS + Local users"}
     methods = []
-    if radius_login or radius_servers:
-        methods.append("RADIUS")
+    if radius_login:
+        methods.append(sel_names.get(radius_sel, f"RADIUS (mode {radius_sel})"))
+    elif radius_servers:
+        methods.append("RADIUS server configured (not selected for login)")
     if ldap_ad:
         methods.append("LDAP/AD")
     auth_method = " + ".join(methods) if methods else "Local users only"
 
     if ldap_ad:
-        directory = "Active Directory / LDAP"
+        directory, directory_state = "Active Directory / LDAP", "ok"
     elif saml_entra:
-        directory = "Entra ID / SAML"
+        directory, directory_state = "Entra ID / SAML", "ok"
+    elif radius_login and radius_servers:
+        directory = (f"via RADIUS ({', '.join(sorted(set(radius_servers)))}) "
+                     "— backend directory not visible in the export")
+        directory_state = "review"
+    elif radius_login:
+        directory, directory_state = ("via RADIUS (server not found in "
+                                      "export)", "review")
     else:
-        directory = "None — local accounts only"
+        directory, directory_state = "None — local accounts only", "none"
 
-    mfa_parts = []
+    # Any MFA counts: DUO, Entra/SAML, SonicOS one-time passwords on the VPN
+    # user group(s), or a RADIUS server the policy declares as an MFA proxy.
+    pol = (RULES.get("vpn", {}) if isinstance(RULES, dict) else {}) or {}
+    mfa_radius = {str(x).strip() for x in (pol.get("mfa_radius_servers") or [])}
+    radius_mfa = sorted({h for h in radius_servers if h in mfa_radius})
+    mfa_parts, mfa_kinds = [], []
     if duo:
-        mfa_parts.append("DUO")
+        mfa_parts.append("DUO"); mfa_kinds.append("DUO")
+    if radius_mfa:
+        mfa_parts.append("MFA via RADIUS " + ", ".join(radius_mfa)
+                         + " (declared in policy)")
+        mfa_kinds.append("DUO")
     if saml_entra:
-        mfa_parts.append("Entra/SAML")
+        mfa_parts.append("Entra/SAML"); mfa_kinds.append("Entra")
+    for g, m in otp_groups:
+        mfa_parts.append(f"SonicOS {m} on group '{g}'")
+        if (g, m) in vpn_otp:
+            mfa_kinds.append(m)
     if admin_totp:
-        mfa_parts.append("TOTP (admin)")
-    mfa = ", ".join(mfa_parts) if mfa_parts else "None"
+        mfa_parts.append("TOTP (admin login)")
+    vpn_mfa = bool(duo or radius_mfa or saml_entra or vpn_otp)
+    mfa_unverified = (not vpn_mfa) and radius_login and bool(radius_servers)
+    if mfa_parts:
+        mfa = ", ".join(mfa_parts)
+    elif mfa_unverified:
+        mfa = ("unverified — login auth is RADIUS to "
+               + ", ".join(sorted(set(radius_servers)))
+               + " (a DUO Authentication Proxy or NPS with an MFA extension "
+               "presents as plain RADIUS; confirm with its owner)")
+    else:
+        mfa = "None"
 
     return {
         "sslvpn": sslvpn, "l2tp": l2tp,
+        "sslvpn_port": flat.get("sslvpnSvcPort", ""),
+        "sslvpn_pool": sslvpn_pool,
         "auth_method": auth_method,
         "radius_servers": sorted(set(radius_servers)),
         "directory": directory,
@@ -380,21 +479,11 @@ def detect_vpn_auth(flat):
         "saml": saml_entra, "saml_servers": sorted(set(saml_servers)),
         "duo": duo, "admin_totp": admin_totp,
         "mfa": mfa,
+        "mfa_kinds": sorted(set(mfa_kinds)),
+        "vpn_mfa": vpn_mfa, "mfa_unverified": mfa_unverified,
+        "otp_groups": [f"{g} ({m})" for g, m in otp_groups],
+        "directory_state": directory_state,
     }
-
-
-def _epoch_str(v):
-    """SonicWall epoch-seconds timestamp -> 'YYYY-MM-DD HH:MM' (or '')."""
-    try:
-        t = int(str(v).strip() or "0")
-    except ValueError:
-        return ""
-    if t <= 0:
-        return ""
-    try:
-        return datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M")
-    except Exception:
-        return ""
 
 
 def parse_local_users(flat):
@@ -406,7 +495,7 @@ def parse_local_users(flat):
         userGroupObj* schema (absent when the firewall has no local users).
     Directory (LDAP/AD/Entra) accounts are NOT in the EXP export.
 
-    Each user dict: name, builtin, comment, enabled, last_login, admin,
+    Each user dict: name, builtin, comment, enabled, admin,
     vpn (True/False/None=unknown), member_of (list of group names).
     """
     def truthy(v):
@@ -450,7 +539,6 @@ def parse_local_users(flat):
         "builtin": True,
         "comment": "Built-in administrator",
         "enabled": True,
-        "last_login": _epoch_str(flat.get("adminLastLoginTime", "")),
         "admin": True,
         "vpn": None,                      # not recorded in the export
         "member_of": ["SonicWALL Administrators"],
@@ -477,7 +565,6 @@ def parse_local_users(flat):
             "builtin": False,
             "comment": _g(flat, "userObjComment", i),
             "enabled": not disabled,
-            "last_login": _epoch_str(_g(flat, "userObjLastLoginTime", i)),
             "admin": any(is_admin_group(g) for g in member_of),
             "vpn": (any(is_vpn_group(g) for g in member_of)
                     or bool(_g(flat, "userObjVpnDestNet", i))),
@@ -579,6 +666,34 @@ def resolve_ips(name, addr, groups, seen=None):
     if t == "4":
         return [f"{obj['ip1']}/{obj['ip2']}"]
     return []
+
+
+PROTO_NAMES = {"1": "ICMP", "2": "IGMP", "6": "TCP", "17": "UDP",
+               "41": "IPv6", "47": "GRE", "50": "ESP", "51": "AH"}
+
+
+def service_ports(cfg, name, seen=None):
+    """Resolve a service object or group name to ['TCP 443', 'UDP 500', ...]
+    using the config's service objects; [] when unresolvable (e.g. 'Any')."""
+    seen = seen or set()
+    if name in seen:
+        return []
+    seen.add(name)
+    groups = cfg.get("_svc_groups", {})
+    if name in groups:
+        out = []
+        for m in groups[name]:
+            out += [p for p in service_ports(cfg, m, seen) if p not in out]
+        return out
+    s = cfg.get("_svcs", {}).get(name)
+    if not s:
+        return []
+    proto = PROTO_NAMES.get(s["proto"], f"proto {s['proto']}")
+    p1, p2 = s["p1"], s["p2"]
+    if not p1 or p1 == "0":
+        return [proto]
+    port = p1 if (p1 == p2 or not p2 or p2 == "0") else f"{p1}-{p2}"
+    return [f"{proto} {port}"]
 
 
 def _resolve_source(src, addr):
@@ -696,6 +811,43 @@ def store(conn, cfg):
 # ---------------------------------------------------------------------------
 def vlans_of(cfg):
     return [x for x in cfg["interfaces"] if x["vlan"] not in ("0", "")]
+
+
+def _role_info(role):
+    return VLAN_ROLE_INFO.get(role, {})
+
+
+def _suggested_role_for_id(vid):
+    """Role whose suggested VLAN id equals this configured id, else ''."""
+    for role, info in VLAN_ROLE_INFO.items():
+        if info.get("vlan") is not None and str(info["vlan"]) == str(vid):
+            return role
+    return ""
+
+
+def _vlan_desc(v):
+    """'VLAN 50 · Voip · zone VOIP · 10.1.50.1/24' for one sub-interface."""
+    bits = [f"VLAN {v['vlan']}", v["comment"] or v["name"]]
+    if v.get("zone"):
+        bits.append(f"zone {v['zone']}")
+    bits.append(_subnet(v))
+    return " · ".join(bits)
+
+
+def _vlan_sort_key(v):
+    return int(v["vlan"]) if str(v["vlan"]).isdigit() else 0
+
+
+def _subnet(v):
+    """'10.1.50.1/24' from an interface's static IP + mask; a dash when the
+    sub-interface is unnumbered (0.0.0.0, e.g. bridged / no IP)."""
+    ip, mask = v.get("ip") or "", v.get("mask") or ""
+    if not ip or ip == "0.0.0.0":
+        return "— (no IP)"
+    try:
+        return f"{ip}/{ipaddress.ip_network(f'{ip}/{mask}', strict=False).prefixlen}"
+    except ValueError:
+        return f"{ip} / {mask}" if mask else ip
 
 
 def analyze(cfg):
@@ -829,23 +981,33 @@ def analyze(cfg):
     # VPN authentication & MFA
     vpn = cfg["vpn"]
     vpn_active = vpn["sslvpn"] or vpn["l2tp"]
-    has_directory = vpn["directory"].startswith(("Active", "Entra"))
-    has_mfa = vpn["mfa"] != "None"
-    if not has_mfa:
+    has_directory = vpn["directory_state"] == "ok"
+    has_mfa = vpn["vpn_mfa"]
+    if not has_mfa and vpn["mfa_unverified"]:
+        add("MEDIUM", "MFA could not be verified from the export",
+            f"Login authentication = {vpn['auth_method']} to "
+            f"{', '.join(vpn['radius_servers'])}. A DUO Authentication Proxy "
+            "or an NPS server with an MFA extension presents to the firewall "
+            "as plain RADIUS, so the export cannot show whether a second "
+            "factor is enforced. Confirm with the RADIUS server owner"
+            + (" — SSL VPN is configured." if vpn["sslvpn"] else "."))
+    elif not has_mfa:
         add("HIGH" if vpn_active else "MEDIUM",
             "No multi-factor authentication (MFA) configured",
-            "No DUO (RADIUS), Entra/SAML, or TOTP MFA detected. "
-            f"Login authentication = {vpn['auth_method']}."
+            "No DUO, Entra/SAML, SonicOS one-time password (TOTP / email) on "
+            "the VPN user groups, or RADIUS-MFA detected. Login "
+            f"authentication = {vpn['auth_method']}."
             + (" SSL VPN appears configured." if vpn["sslvpn"] else ""))
-    if not has_directory:
+    if vpn["directory_state"] == "none":
         add("MEDIUM", "Authentication not integrated with AD / Entra",
             "No Active Directory / LDAP or Entra ID / SAML integration "
             f"detected; authentication is '{vpn['auth_method']}'. Bank policy "
             "typically requires directory-backed accounts.")
-    elif not vpn["duo"]:
-        add("LOW", "Directory integrated but DUO MFA not detected",
-            f"Directory = {vpn['directory']}, but no DUO reference found. "
-            "Confirm MFA is enforced for VPN logins.")
+    elif vpn["directory_state"] == "review":
+        add("LOW", "Directory behind RADIUS not visible",
+            f"Users authenticate via RADIUS ({', '.join(vpn['radius_servers'])}"
+            "); whether that server is backed by Active Directory / Entra ID "
+            "cannot be seen in the export. Confirm it is.")
 
     # ---- checklist ----
     def status(ok, review=False):
@@ -883,8 +1045,11 @@ def analyze(cfg):
         ("5. Internal management limited to 1-2 IPs",
          status(bool(lan_mgmt) and not lan_open2, review=not lan_mgmt),
          "Internal mgmt from Any present" if lan_open2 else "restricted"),
-        ("6. VPN auth via AD/Entra + MFA (DUO)",
-         status(has_directory and has_mfa),
+        ("6. VPN auth via AD/Entra + MFA",
+         status(has_directory and has_mfa,
+                review=(not (has_directory and has_mfa))
+                and vpn["directory_state"] != "none"
+                and (has_mfa or vpn["mfa_unverified"])),
          f"auth={vpn['auth_method']}; directory={vpn['directory']}; "
          f"MFA={vpn['mfa']}"),
     ]
@@ -892,10 +1057,14 @@ def analyze(cfg):
     # 6. VLAN role coverage
     vlan_list = vlans_of(cfg)
     coverage = []
+    def _vtext(v):      # name + comment + zone, so an unnamed VLAN can
+        return (v["name"] + " " + v["comment"] + " "     # still match by zone
+                + (v.get("zone") or "")).lower()
     for role, pats in VLAN_ROLES.items():
+        excl = VLAN_ROLE_INFO.get(role, {}).get("exclude", [])
         matches = [v for v in vlan_list
-                   if any(p in (v["name"] + " " + v["comment"]).lower()
-                          for p in pats)]
+                   if any(p in _vtext(v) for p in pats)
+                   and not any(x in _vtext(v) for x in excl)]
         coverage.append((role, matches))
 
     return checklist, findings, coverage, vlan_list
@@ -988,7 +1157,10 @@ def evaluate_compliance(cfg, union_cats, union_countries):
     # Admin interface + SSH may ONLY come from LAN/WAN (never VPN or other VLANs)
     admin_zones = set(R["management"].get("admin_allowed_zones",
                                           ["LAN", "WAN"]))
-    off_zone = [r for r in mgmt if r["src_zone"] not in admin_zones]
+    # Rules sourced from the datacenter management object ('RT Datacenter',
+    # or its legacy 'GMS Addresses' name) are the sanctioned external path.
+    off_zone = [r for r in mgmt if r["src_zone"] not in admin_zones
+                and not is_dc_rule(r)]
     off_lbl = sorted({f"{r['src_zone']} -> {r['service']}" for r in off_zone})
     rule("Admin/SSH access blocked from VPN & non-"
          + "/".join(sorted(admin_zones)) + " zones",
@@ -1028,6 +1200,32 @@ def evaluate_compliance(cfg, union_cats, union_countries):
          "OK" if not ext_red else f"{len(ext_red)} WAN service(s) open to any: "
          + ", ".join(sorted({r['service'] for r in ext_red})))
 
+    # Suggested VLAN plan coverage (review item — WARN, never FAIL)
+    _, _, cov, vl = analyze(cfg)
+    planned = [r for r in VLAN_ROLES if _role_info(r).get("vlan") is not None]
+    missing = [r for r, m in cov if r in planned and not m]
+    unclassified = [v for v in vl
+                    if not any(v in m for _, m in cov)]
+    rule("Suggested VLAN plan coverage",
+         "PASS" if not missing and not unclassified else "WARN",
+         ("all suggested VLAN roles present" if not missing else
+          f"{len(missing)} of {len(planned)} suggested roles missing: "
+          + ", ".join(missing))
+         + (f"; {len(unclassified)} configured VLAN(s) match no role: "
+            + ", ".join(f"VLAN {v['vlan']}" for v in unclassified)
+            if unclassified else ""))
+
+    # Port forwards (inbound NAT) must be restricted to known source IPs
+    pfs = port_forwards(cfg)
+    pf_red = [f for f in pfs if f["level"] == "red"]
+    rule("Port forwards restricted to known source IPs",
+         "PASS" if not pf_red else "FAIL",
+         "no port forwards" if not pfs else
+         (f"OK — {len(pfs)} forward(s), all source-restricted" if not pf_red
+          else f"{len(pf_red)} of {len(pfs)} forward(s) open to any source: "
+          + ", ".join(f"{f['ports']} -> {f['target_ips'] or f['target']}"
+                      for f in pf_red)[:200]))
+
     # Branch-to-branch WAN->LAN rules must be pinned to known branch subnets
     wla = wan_lan_any_source(cfg)
     rule("Branch (WAN->LAN) rules scoped to known subnets",
@@ -1042,25 +1240,48 @@ def evaluate_compliance(cfg, union_cats, union_countries):
          "OK — internal ping only" if not wanping
          else f"{len(wanping)} WAN Ping rule(s) answer any source")
 
-    # SSL VPN -> DUO/Entra MFA required
+    # SSL VPN -> MFA required (any accepted kind: DUO, Entra, SonicOS OTP)
     vpn = cfg["vpn"]
     if vpn["sslvpn"]:
-        accepted = R["vpn"].get("accepted_mfa", ["DUO", "Entra"])
-        has = any(m.lower() in vpn["mfa"].lower() for m in accepted)
-        rule("SSL VPN configured -> DUO/Entra MFA required",
-             "PASS" if has else "FAIL", f"SSL VPN on; MFA in use = {vpn['mfa']}")
+        accepted = {m.lower() for m in
+                    R["vpn"].get("accepted_mfa", ["DUO", "Entra", "TOTP"])}
+        ok_kinds = [k for k in vpn["mfa_kinds"] if k.lower() in accepted]
+        if ok_kinds:
+            st_, det = "PASS", f"SSL VPN on; MFA = {vpn['mfa']}"
+        elif vpn["vpn_mfa"]:
+            st_, det = "WARN", (f"SSL VPN on; MFA present ({vpn['mfa']}) but "
+                                "not an accepted kind — check policy")
+        elif vpn["mfa_unverified"]:
+            st_, det = "WARN", f"SSL VPN on; MFA {vpn['mfa']}"
+        else:
+            st_, det = "FAIL", f"SSL VPN on; MFA = {vpn['mfa']}"
+        rule("SSL VPN configured -> MFA required", st_, det)
     else:
-        rule("SSL VPN configured -> DUO/Entra MFA required", "NA",
+        rule("SSL VPN configured -> MFA required", "NA",
              "SSL VPN not configured on this firewall")
+    ds = vpn["directory_state"]
     rule("VPN authentication integrated with AD/Entra",
-         "PASS" if vpn["directory"].startswith(("Active", "Entra")) else "FAIL",
+         "PASS" if ds == "ok" else ("WARN" if ds == "review" else "FAIL"),
          f"directory = {vpn['directory']}")
 
-    # GMS is legacy — must be replaced by NSM
-    rule("Legacy GMS management not configured (use NSM)",
-         "FAIL" if cfg["gms_enabled"] else "PASS",
-         "gmsServerEnable = on" if cfg["gms_enabled"]
-         else "GMS not enabled")
+    # NSM management implemented: the fleet is managed centrally by NSM from
+    # the RT Datacenter. On the firewall that is (1) the GMS/NSM management
+    # channel switched on and (2) a management rule sourced from the
+    # datacenter object (RT Datacenter, or its legacy 'GMS Addresses' name).
+    nsm_required = R.get("nsm", {}).get("required", True)
+    dc_name = R["management"].get("external_mgmt_source", "RT Datacenter")
+    nsm_rules = [r for r in mgmt if is_dc_rule(r)]
+    nsm_missing = []
+    if not cfg["gms_enabled"]:
+        nsm_missing.append("GMS/NSM management = off")
+    if not nsm_rules:
+        nsm_missing.append(f"no management rule from {dc_name}")
+    rule(f"NSM management implemented ({dc_name})",
+         "NA" if not nsm_required else ("PASS" if not nsm_missing else "FAIL"),
+         "not required by policy" if not nsm_required else
+         ("; ".join(nsm_missing) if nsm_missing else
+          f"GMS/NSM management = on; {len(nsm_rules)} mgmt rule(s) from "
+          + ", ".join(sorted({r["src_obj"] for r in nsm_rules}))))
 
     # Consistency: match the strictest firewall
     if union_cats is not None:
@@ -1229,6 +1450,125 @@ def internal_open_ports(cfg):
     return out
 
 
+def _iface_name(cfg, idx):
+    """Interface name for a NAT policy's interface index ('' / -1 = Any)."""
+    if idx in ("", "-1", None):
+        return "Any"
+    for x in cfg["interfaces"]:
+        if str(x.get("idx")) == str(idx):
+            return x["name"]
+    return f"interface {idx}"
+
+
+def _ips_plain(cfg, name):
+    """Comma-joined IPs/networks for an address object or group; '' when
+    the name does not resolve (e.g. an interface-IP placeholder)."""
+    out = []
+    for x in resolve_ips(name, cfg["_addr"], cfg["_groups"]):
+        if not x or x.startswith("0.0.0.0"):
+            continue
+        if "/" in x:
+            try:
+                x = str(ipaddress.IPv4Network(x, strict=False))
+            except Exception:
+                pass
+        out.append(x)
+    return ", ".join(out)
+
+
+def port_forwards(cfg):
+    """Inbound NAT policies that publish an internal host on a public IP
+    (destination translated, no source translation — loopback / outbound
+    policies are excluded). Each entry: service + resolved ports, inbound
+    interface, public IP object, internal target, the WAN access rule(s)
+    that admit it, and the resulting source restriction with a traffic-light
+    level: red = open to any source, orange = restricted but broad / via the
+    NAT source only, green = restricted to 1-2 IPs, gray = no WAN access
+    rule admits it (forward not reachable)."""
+    out = []
+    for p in cfg.get("nat", []):
+        if p["enabled"] != "1":
+            continue
+        td, od = p["trans_dst"], p["orig_dst"]
+        if not td or td == "Original" or not od or od == "Original":
+            continue
+        if p.get("trans_src", "") not in ("", "Original"):
+            continue                       # loopback / source-NAT policy
+        svc = p["orig_svc"] or "Any"
+        ports = service_ports(cfg, svc)
+
+        def _covers(rule_svc):
+            """Does the access rule's service admit the forwarded service?"""
+            if rule_svc in (svc, "Any") or svc == "Any":
+                return True
+            rp, fp = set(service_ports(cfg, rule_svc)), set(ports)
+            return bool(fp) and fp <= rp
+        # the admitting rule: WAN -> internal zone, destination = the public
+        # or the translated object, service covering the forward
+        rules = [r for r in cfg["rules"]
+                 if r["enabled"] == "1" and r["action"] == "Allow"
+                 and r["src_zone"] == "WAN" and r["dst_zone"] not in ("", "WAN")
+                 and r["dst_obj"] in (od, td) and _covers(r["service"])]
+        nat_src = p["orig_src"] or ""
+        nat_restricted = bool(nat_src) and nat_src.lower() != "any"
+        rule_open = any(r["src_count"] is None for r in rules)
+        counts = [r["src_count"] for r in rules if r["src_count"] is not None]
+        broad = any(c == "?" or (isinstance(c, int) and c > 2) for c in counts)
+        if not rules:
+            level = "gray"
+            restr = ("no WAN access rule admits it — forward not reachable"
+                     + (f" (NAT source {nat_src})" if nat_restricted else ""))
+        elif rule_open and not nat_restricted:
+            level, restr = "red", "Any (UNRESTRICTED)"
+        else:
+            level = "orange" if (broad or rule_open) else "green"
+            srcs = sorted({r["src_desc"] for r in rules
+                           if r["src_count"] is not None})
+            if nat_restricted:
+                srcs.append(f"NAT source {nat_src}")
+            restr = "restricted to: " + "; ".join(srcs)
+        out.append({
+            "name": p.get("name") or "", "comment": p["comment"] or "",
+            "service": svc, "ports": ", ".join(ports) or svc,
+            "iface": _iface_name(cfg, p.get("src_iface")),
+            "public": od, "public_ips": _ips_plain(cfg, od),
+            "target": td, "target_ips": _ips_plain(cfg, td),
+            "trans_svc": (p["trans_svc"]
+                          if p["trans_svc"] not in ("", "Original") else ""),
+            "rules": rules, "restriction": restr, "level": level,
+        })
+    return out
+
+
+def _portforwards_table(pfs):
+    cls = {"red": "fail", "orange": "review", "green": "pass", "gray": "muted"}
+    b = ["<table><tr><th>Service / port(s)</th><th>Inbound interface</th>"
+         "<th>Public IP</th><th>Forwards to (internal)</th>"
+         "<th>Source restriction</th><th>NAT policy</th></tr>"]
+    for f in pfs:
+        pub = (f"<b>{esc(f['public_ips'])}</b> <small>({esc(f['public'])})"
+               "</small>" if f["public_ips"] else esc(f["public"]))
+        tgt = (f"<b>{esc(f['target_ips'])}</b> <small>({esc(f['target'])})"
+               "</small>" if f["target_ips"] else esc(f["target"]))
+        if f["trans_svc"]:
+            tgt += f"<br><small>port remapped to {esc(f['trans_svc'])}</small>"
+        svc = f"<b>{esc(f['ports'])}</b>" + (
+            f" <small>({esc(f['service'])})</small>"
+            if f["ports"] != f["service"] else "")
+        nm = esc(f["name"]) + (
+            f"<br><small class='muted'>{esc(f['comment'])}</small>"
+            if f["comment"] else "")
+        via = "".join(
+            f"<br><small class='muted'>via rule: {esc(r['src_zone'])} -> "
+            f"{esc(r['dst_zone'])} | {esc(r['service'])} | source "
+            f"{esc(r['src_obj'] or 'Any')}</small>" for r in f["rules"][:3])
+        b.append(f"<tr><td>{svc}</td><td>{esc(f['iface'])}</td><td>{pub}</td>"
+                 f"<td>{tgt}</td><td><span class='{cls[f['level']]}'>"
+                 f"{esc(f['restriction'])}</span>{via}</td><td>{nm}</td></tr>")
+    b.append("</table>")
+    return "".join(b)
+
+
 def wan_ping_rules(cfg):
     """Enabled Allow rules that make the firewall answer ping from the WAN
     (Internet). Internal (LAN) ping is intentionally left alone."""
@@ -1318,6 +1658,28 @@ def build_differences(configs):
                      + "</tr>")
         b.append("</table>")
 
+    # Suggested VLAN plan vs each firewall
+    b.append("<h2>Expected VLAN roles (suggested VLAN plan)</h2>"
+             "<small>Which firewall has which role; cells show the configured "
+             "VLAN. Details and segmentation guidance are in Findings.</small>"
+             "<table><tr><th>Suggested VLAN</th><th>Role</th>"
+             + "".join(f"<th>{esc(label(c))}</th>" for c in configs) + "</tr>")
+    cov_by_fw = []
+    for c in configs:
+        _, _, cov, _ = analyze(c)
+        cov_by_fw.append({role: m for role, m in cov})
+    for role in VLAN_ROLES:
+        sid = _role_info(role).get("vlan")
+        cells = ""
+        for cov in cov_by_fw:
+            m = cov.get(role, [])
+            cells += ("<td class='pass'>" + "<br>".join(
+                esc(f"VLAN {v['vlan']} ({v['comment'] or v['name']})")
+                for v in m) + "</td>" if m else "<td class='muted'>—</td>")
+        b.append(f"<tr><td>{esc(str(sid)) if sid is not None else '—'}</td>"
+                 f"<td><b>{esc(role)}</b></td>{cells}</tr>")
+    b.append("</table>")
+
     # VLAN inventory
     b.append("<h2>VLAN inventory</h2>")
     for c in configs:
@@ -1334,6 +1696,19 @@ def build_differences(configs):
             b.append(f"<tr><td>{esc(v['vlan'])}</td><td>{esc(v['name'])}</td>"
                      f"<td>{cname}</td><td>{esc(v['ip'])}</td></tr>")
         b.append("</table></div>")
+
+    # Port forwards (inbound NAT), per firewall
+    b.append("<h2>Port forwards (inbound NAT)</h2><small>NAT policies that "
+             "publish an internal host on a public IP — the port, inbound "
+             "interface, internal target and whether the Internet source is "
+             "restricted.</small>")
+    for c in configs:
+        pfs = port_forwards(c)
+        b.append(f"<div class='card'><h3>{esc(label(c))}</h3>")
+        if not pfs:
+            b.append("<p class='pass'>&#10004; No port forwards.</p></div>")
+            continue
+        b.append(_portforwards_table(pfs) + "</div>")
 
     # management posture
     b.append("<h2>Management access posture</h2>"
@@ -1362,6 +1737,221 @@ def build_differences(configs):
                  + "".join(f"<td{cls}>{esc(v)}</td>" for v in vals) + "</tr>")
     b.append("</table>")
 
+    # External access exposure (WAN-inbound open ports)
+    b.append("<h2>External access exposure</h2>"
+             "<small>Everything that answers traffic from the Internet "
+             "(including ping): each service, who is allowed to connect, "
+             "and where the traffic actually lands — the internal server it "
+             "forwards to (from the NAT policies), the firewall's own "
+             "listener, or a VPN tunnel route. "
+             "<span class='fail'>Red</span> = open to the entire Internet; "
+             "<span class='review'>orange</span> = limited but review; "
+             "<span class='pass'>green</span> = locked to 1&ndash;2 source "
+             "IPs. Cells highlighted where the firewalls differ.</small>"
+             "<table><tr><th>Service / port</th>"
+             + "".join(f"<th>{esc(label(c))}</th>" for c in configs)
+             + "</tr>")
+    rank = {"red": 0, "orange": 1, "green": 2}
+    FW_LISTENERS = ("Management", "IKE", "SSL VPN", "SSLVPN", "Ping",
+                    "NAT-T", "SonicpointN")
+
+    def _fmt_net(s):
+        if "/" in s:
+            try:
+                return str(ipaddress.IPv4Network(s, strict=False))
+            except Exception:
+                return s
+        return s
+
+    def _obj_ips(cfg, name):
+        return ", ".join(_fmt_net(x) for x in
+                         resolve_ips(name, cfg["_addr"], cfg["_groups"])
+                         if x and not x.startswith("0.0.0.0"))
+
+    def _addr_html(cfg, name):
+        ips = _obj_ips(cfg, name)
+        return (f"<b>{esc(ips)}</b> <small>({esc(name)})</small>"
+                if ips else f"<b>{esc(name)}</b>")
+
+    def _exp_nat(cfg, r):
+        """(internal-address-plain, internal-address html, note) for one
+        rule. Plain address is '' when no internal server is involved."""
+        svc, dst = r["service"], r["dst_obj"]
+        if r["dst_zone"] == "VPN":
+            return ("", "&mdash;",
+                    "site-to-site VPN tunnel route — traffic arrives "
+                    "inside the encrypted tunnel")
+        if any(x in svc for x in FW_LISTENERS):
+            return ("", "&mdash;",
+                    "answered by the firewall itself (its own listener)")
+        nats = [p for p in cfg.get("nat", [])
+                if p["enabled"] == "1" and p["trans_dst"]]
+        for p in nats:                # exact service match on the forward
+            if p["orig_dst"] == dst and p["orig_svc"] in (svc, "", "Any"):
+                return (_obj_ips(cfg, p["trans_dst"]) or p["trans_dst"],
+                        _addr_html(cfg, p["trans_dst"]),
+                        "NAT port-forward to this internal server")
+        for p in nats:                # rule written against the private obj
+            if p["trans_dst"] == dst:
+                return (_obj_ips(cfg, dst) or dst,
+                        _addr_html(cfg, dst),
+                        "internal server — published at "
+                        f"{esc(p['orig_dst'] or 'any WAN IP')} for "
+                        f"service {esc(p['orig_svc'] or 'Any')}")
+        for p in nats:                # same public IP, other service name
+            if p["orig_dst"] == dst:
+                return (_obj_ips(cfg, p["trans_dst"]) or p["trans_dst"],
+                        _addr_html(cfg, p["trans_dst"]),
+                        "NAT port-forward to this internal server")
+        return ("", "<span class='fail'>none</span>",
+                "no NAT forward found — nothing is published behind "
+                "this rule (likely leftover; verify &amp; remove)")
+
+    # group rows: tunnel routes together; rules that publish the SAME
+    # internal server together (whatever their service names); the rest
+    # by service name
+    esvcs = []
+    eper = []
+    for c in configs:
+        seen = {}
+        for r in external_open_ports(c):
+            if r["dst_zone"] == "VPN":
+                key = "Site-to-site VPN"
+            else:
+                plain_addr, _, _ = _exp_nat(c, r)
+                key = f"srv:{plain_addr}" if plain_addr else r["service"]
+            seen.setdefault(key, []).append(r)
+            if key not in esvcs:
+                esvcs.append(key)
+        eper.append((c, seen))
+
+    def _exp_cell(cfg, rules, show_svc=False):
+        """(html, plain-text) for one firewall's rules on one row."""
+        if not rules:
+            return "<span class='muted'>—</span>", "—"
+        klass = {"red": "fail", "orange": "review", "green": "pass"}
+        parts, plain = [], []
+        for r in rules:
+            color, text = compliance(r)
+            ips = _obj_ips(cfg, r["dst_obj"])
+            obj = r["dst_obj"] or "Any"
+            zone = f" &middot; {esc(r['dst_zone'])}" if r["dst_zone"] else ""
+            if ips:
+                dst = f"{esc(ips)} <small>{esc(obj)}{zone}</small>"
+            else:
+                dst = f"{esc(obj)}<small>{zone}</small>"
+            src = "Any (entire Internet)" if r["src_obj"] == "Any" \
+                else r["src_obj"]
+            _, nat_addr, notes = _exp_nat(cfg, r)
+            if r["comment"]:
+                notes += f"; rule comment: &ldquo;{esc(r['comment'])}&rdquo;"
+            svc_line = ""
+            if show_svc:
+                sp = ", ".join(service_ports(cfg, r["service"]))
+                svc_line = (f"<b>Service:</b> {esc(r['service'])}"
+                            + (f" <small>({esc(sp)})</small>" if sp else "")
+                            + "<br>")
+            parts.append(
+                f"<div style='margin:2px 0 10px'>{svc_line}"
+                f"<b>Source:</b> {esc(src)} &mdash; "
+                f"<span class='{klass.get(color, 'review')}'>{esc(text)}"
+                f"</span><br>"
+                f"<b>Destination:</b> {dst}<br>"
+                f"<b>Internal NAT address:</b> {nat_addr}<br>"
+                f"<b>Notes:</b> <small>{notes}</small></div>")
+            plain.append(f"{r['service']} {ips or obj} {text} "
+                         f"{r['src_obj']}")
+        return "".join(parts), "; ".join(sorted(plain))
+
+    def _exp_rank(svc):
+        worst = 3
+        for _, seen in eper:
+            for r in seen.get(svc, []):
+                worst = min(worst, rank.get(compliance(r)[0], 3))
+        return worst
+
+    if not esvcs:
+        b.append(f"<tr><td colspan='{1 + len(configs)}' class='muted'>"
+                 "No enabled WAN-inbound Allow rules on any firewall."
+                 "</td></tr></table>")
+    else:
+        for svc in sorted(esvcs, key=lambda s: (_exp_rank(s), s.lower())):
+            is_srv = svc.startswith("srv:")
+            if is_srv:
+                # merged row: everything published for one internal server
+                names, ports = [], []
+                for cfg2, seen2 in eper:
+                    for r in seen2.get(svc, []):
+                        if r["service"] not in names:
+                            names.append(r["service"])
+                        for p in service_ports(cfg2, r["service"]):
+                            if p not in ports:
+                                ports.append(p)
+                disp = (f"Published server<br><b>{esc(svc[4:])}</b>"
+                        f"<br><small>via: {esc(', '.join(names))}</small>")
+                if ports:
+                    shown = ", ".join(ports[:8]) \
+                        + ("&hellip;" if len(ports) > 8 else "")
+                    disp += f"<br><small>{esc(shown)}</small>"
+            else:
+                disp = esc(svc)
+                if svc == "Site-to-site VPN":
+                    disp += (" <small>(encrypted IPsec tunnel &mdash; "
+                             "rule service: Any)</small>")
+                elif "IKE" in svc or "NAT-T" in svc:
+                    disp += " <small>(IPsec VPN)</small>"
+                elif "SSL VPN" in svc or "SSLVPN" in svc:
+                    disp += " <small>(SSL VPN)</small>"
+                elif "L2TP" in svc:
+                    disp += " <small>(L2TP VPN)</small>"
+                ports = []
+                for c in configs:             # first firewall that resolves
+                    for p in service_ports(c, svc):
+                        if p not in ports:
+                            ports.append(p)
+                    if ports:
+                        break
+                if ports:
+                    shown = ", ".join(ports[:8]) \
+                        + ("&hellip;" if len(ports) > 8 else "")
+                    disp += f"<br><small>{esc(shown)}</small>"
+            cells = [_exp_cell(cfg, seen.get(svc), is_srv)
+                     for cfg, seen in eper]
+            cls = " class='diff'" if len(set(p for _, p in cells)) > 1 else ""
+            b.append(f"<tr><td>{disp}</td>"
+                     + "".join(f"<td{cls}>{h}</td>" for h, _ in cells)
+                     + "</tr>")
+        # SSL VPN is a server setting, not an access rule — always show it
+        if not any("SSL VPN" in s or "SSLVPN" in s for s in esvcs):
+            cells = []
+            for c in configs:
+                v = c["vpn"]
+                if v["sslvpn"]:
+                    pool = (f", client pool {v['sslvpn_pool']}"
+                            if v["sslvpn_pool"] else "")
+                    cells.append(
+                        "<span class='review'>server configured</span> "
+                        f"<small>port {esc(v['sslvpn_port'] or '?')}"
+                        f"{esc(pool)} — no WAN-inbound listener rule in "
+                        "this export; verify which zones/interfaces it is "
+                        "enabled on</small>")
+                else:
+                    cells.append("<span class='pass'>not configured</span> "
+                                 "<small>— no remote-access SSL VPN server "
+                                 "on this firewall</small>")
+            cls = " class='diff'" if len(set(cells)) > 1 else ""
+            b.append("<tr><td>SSL VPN <small>(remote access)</small></td>"
+                     + "".join(f"<td{cls}>{h}</td>" for h in cells)
+                     + "</tr>")
+        # ping is checked even when closed, so the report shows it was
+        if not any("Ping" in s for s in esvcs):
+            b.append("<tr><td>Ping (ICMP)</td>"
+                     + f"<td colspan='{len(configs)}'><span class='pass'>"
+                     "not allowed</span> <small>— no firewall responds to "
+                     "ping from the Internet (as it should be)</small></td>"
+                     "</tr>")
+        b.append("</table>")
+
     # VPN authentication & MFA
     b.append("<h2>VPN Authentication &amp; MFA</h2>"
              "<small>Directory (AD/Entra) integration and multi-factor status. "
@@ -1377,6 +1967,8 @@ def build_differences(configs):
         ("LDAP/AD domains", lambda v: ", ".join(v["ldap_servers"]) or "—"),
         ("Entra / SAML", lambda v: "yes" if v["saml"] else "no"),
         ("DUO detected", lambda v: "yes" if v["duo"] else "no"),
+        ("SonicOS one-time passwords (groups)",
+         lambda v: ", ".join(v["otp_groups"]) or "—"),
         ("Admin login TOTP", lambda v: "on" if v["admin_totp"] else "off"),
         ("MFA in use", lambda v: v["mfa"]),
     ]
@@ -1390,8 +1982,7 @@ def build_differences(configs):
     # Local user accounts
     b.append("<h2>Local users</h2>"
              "<small>User accounts stored on the firewall itself — enabled "
-             "state, last login (only recorded in the export for the admin "
-             "account), management (admin) login, VPN access and group "
+             "state, management (admin) login, VPN access and group "
              "membership. Directory (LDAP/AD/Entra) accounts are not part of "
              "the EXP export.</small>")
 
@@ -1408,7 +1999,7 @@ def build_differences(configs):
             b.append("<p class='muted'>No local user accounts in this "
                      "export.</p></div>")
             continue
-        b.append("<table><tr><th>User</th><th>Status</th><th>Last login</th>"
+        b.append("<table><tr><th>User</th><th>Status</th>"
                  "<th>Admin / mgmt login</th><th>VPN access</th>"
                  "<th>Member of</th></tr>")
         for u in sorted(users, key=lambda x: (not x["builtin"],
@@ -1420,13 +2011,11 @@ def build_differences(configs):
                 nm += f"<br><small>{esc(u['comment'])}</small>"
             status = ("<span class='pill green'>enabled</span>" if u["enabled"]
                       else "<span class='pill red'>disabled</span>")
-            last = (esc(u["last_login"]) if u["last_login"]
-                    else "<span class='muted'>never recorded</span>")
             admin = yn(u["admin"], yes="yes")
             vpn = yn(u["vpn"], yes="yes")
             member = (", ".join(esc(g) for g in u["member_of"])
                       or "<span class='muted'>—</span>")
-            b.append(f"<tr><td>{nm}</td><td>{status}</td><td>{last}</td>"
+            b.append(f"<tr><td>{nm}</td><td>{status}</td>"
                      f"<td>{admin}</td><td>{vpn}</td><td>{member}</td></tr>")
         b.append("</table></div>")
 
@@ -1775,6 +2364,24 @@ def build_findings(configs):
                  "orange = restricted but broad, a named group, or cleartext "
                  "HTTP; red = open to any source (non-compliant).</small></p>")
 
+        # ===== PORT FORWARDS (inbound NAT) =====
+        pfs = port_forwards(cfg)
+        pf_open = sum(1 for f in pfs if f["level"] == "red")
+        b.append("<h3 style='margin-top:20px;font-size:15px;color:#0b2540'>"
+                 "&#8646; Port forwards (inbound NAT)</h3>")
+        if not pfs:
+            b.append("<p class='pass'>&#10004; No port forwards — no NAT "
+                     "policy publishes an internal host on a public IP.</p>")
+        else:
+            b.append(f"<p>{len(pfs)} port forward(s) "
+                     f"<span class='pill {'red' if pf_open else 'green'}'>"
+                     f"{pf_open} open to ANY</span></p>")
+            b.append(_portforwards_table(pfs))
+            b.append("<p><small>Red = reachable from any Internet source; "
+                     "orange = restricted but broad / only by the NAT policy's "
+                     "source; green = restricted to 1-2 source IPs; gray = no "
+                     "WAN access rule admits it.</small></p>")
+
         # Content filter — blocked categories
         b.append("<h3 style='margin-top:16px;font-size:14px'>Content filter — "
                  "blocked categories</h3>")
@@ -1825,20 +2432,82 @@ def build_findings(configs):
                      "the Geo-IP bitmap; spot-check against the firewall UI."
                      "</small></p>")
 
-        # VLAN role coverage
+        # VLAN role coverage — the suggested VLAN plan vs this firewall
         b.append("<h3 style='margin-top:16px;font-size:14px'>Expected VLAN "
-                 "role coverage</h3><table><tr><th>Expected role</th>"
-                 "<th>Present?</th><th>Matching VLAN(s)</th></tr>")
+                 "role coverage (suggested VLAN plan)</h3>"
+                 "<table><tr><th>Suggested VLAN</th><th>Role</th>"
+                 "<th>Purpose / devices</th><th>Present?</th>"
+                 "<th>Configured VLAN(s) · subnet</th>"
+                 "<th>Recommended segmentation &amp; access</th>"
+                 "<th>Findings / notes</th></tr>")
         for role, matches in coverage:
+            info = _role_info(role)
+            sid = info.get("vlan")
+            sid_td = esc(str(sid)) if sid is not None else \
+                "<span class='muted'>—</span>"
+            seg = esc(info.get("segmentation") or "")
+            purpose = esc(info.get("purpose") or "")
             if matches:
-                m = ", ".join(f"VLAN {v['vlan']} "
-                              f"({v['comment'] or v['name']})" for v in matches)
-                b.append(f"<tr><td>{esc(role)}</td><td class='pass'>YES</td>"
-                         f"<td>{esc(m)}</td></tr>")
+                cfgd = "<br>".join(esc(_vlan_desc(v)) for v in matches)
+                notes = []
+                for v in matches:
+                    if sid is not None and str(v["vlan"]) != str(sid):
+                        notes.append(f"configured as VLAN {v['vlan']} "
+                                     f"(plan suggests {sid})")
+                    if not v.get("zone"):
+                        notes.append(f"VLAN {v['vlan']} has no zone assigned")
+                    if not v["comment"]:
+                        notes.append(f"VLAN {v['vlan']} has no name — matched "
+                                     f"by zone {v.get('zone') or '?'}; name it")
+                    if _subnet(v).startswith("—"):
+                        notes.append(f"VLAN {v['vlan']} has no IP (bridged / "
+                                     "unnumbered)")
+                note_td = ("<span class='review'>" + "; ".join(esc(n) for n
+                           in notes) + "</span>" if notes
+                           else "<span class='pass'>present</span>")
+                b.append(f"<tr><td>{sid_td}</td><td><b>{esc(role)}</b></td>"
+                         f"<td>{purpose}</td><td class='pass'>YES</td>"
+                         f"<td>{cfgd}</td><td><small>{seg}</small></td>"
+                         f"<td>{note_td}</td></tr>")
             else:
-                b.append(f"<tr><td>{esc(role)}</td><td class='review'>not on "
-                         "this firewall</td><td class='muted'>—</td></tr>")
-        b.append("</table></div>")
+                b.append(f"<tr><td>{sid_td}</td><td><b>{esc(role)}</b></td>"
+                         f"<td>{purpose}</td><td class='review'>no</td>"
+                         f"<td class='muted'>—</td><td><small>{seg}</small></td>"
+                         "<td class='muted'>not on this firewall — add if the "
+                         "site has these devices</td></tr>")
+        b.append("</table>")
+
+        # Configured VLANs — listed under the expected roles so the two can
+        # be compared directly (which VLAN satisfies which role, and which
+        # VLANs match no expected role at all).
+        b.append("<h4 style='margin:14px 0 6px;font-size:13px'>Configured "
+                 "VLANs on this firewall</h4>")
+        if not vlan_list:
+            b.append("<p class='muted'>No VLAN sub-interfaces configured.</p>")
+        else:
+            b.append("<table><tr><th>VLAN</th><th>Interface</th>"
+                     "<th>Name / comment</th><th>Zone</th><th>Subnet</th>"
+                     "<th>Matches expected role</th></tr>")
+            for v in sorted(vlan_list, key=_vlan_sort_key):
+                roles = [role for role, matches in coverage if v in matches]
+                cname = esc(v["comment"]) or \
+                    "<span class='muted'>(no name)</span>"
+                zone = esc(v.get("zone") or "") or "<span class='muted'>—</span>"
+                hint = _suggested_role_for_id(v["vlan"]) if not roles else ""
+                role_td = (f"<td class='pass'>{esc(', '.join(roles))}</td>"
+                           if roles else
+                           ("<td class='review'>no expected role — VLAN "
+                            f"{esc(v['vlan'])} is the suggested ID for "
+                            f"<b>{esc(hint)}</b>; name/classify it</td>"
+                            if hint else
+                            "<td class='review'>no expected role — "
+                            "name/classify it</td>"))
+                b.append(f"<tr><td>{esc(v['vlan'])}</td>"
+                         f"<td>{esc(v['name'])}</td><td>{cname}</td>"
+                         f"<td>{zone}</td><td>{esc(_subnet(v))}</td>"
+                         f"{role_td}</tr>")
+            b.append("</table>")
+        b.append("</div>")
 
     return _page("SonicWall Security Findings",
                  "Risky / loose rules and audit checklist per firewall",
@@ -2002,6 +2671,23 @@ def _is_auto(r):
     return "auto" in (r.get("comment") or "").lower()
 
 
+def _dc_names():
+    """Lower-cased names of the sanctioned external-management source object
+    (management.external_mgmt_source, e.g. 'RT Datacenter') plus any legacy
+    name it may still carry on a firewall (management.external_mgmt_legacy_
+    names, e.g. the SonicWall default 'GMS Addresses' group)."""
+    m = RULES.get("management", {})
+    names = [m.get("external_mgmt_source") or ""] + \
+        list(m.get("external_mgmt_legacy_names") or [])
+    return {n.strip().lower() for n in names if n and n.strip()}
+
+
+def is_dc_rule(r):
+    """True if the rule's Source is the datacenter management object (under
+    its current or a legacy name) — a sanctioned rule to KEEP, not delete."""
+    return (r.get("src_obj") or "").strip().lower() in _dc_names()
+
+
 def rules_specific(rules):
     """Sorted, de-duplicated list of specific rule labels; auto-generated
     rules are tagged [auto-created]."""
@@ -2017,7 +2703,7 @@ def rules_specific(rules):
 # Note appended to any DELETE-type step that lists auto-generated rules.
 AUTO_NOTE = ("Rules tagged [auto-created] are generated by SonicWall from a "
              "setting — an interface Management checkbox, a VPN policy's "
-             "'Management via this SA', or GMS. Turn OFF that setting and the "
+             "'Management via this SA', or GMS/NSM. Turn OFF that setting and the "
              "rule disappears on its own; do NOT hand-delete it.")
 
 
@@ -2113,7 +2799,11 @@ def remediation_items(cfg, union_cats, union_countries,
     # Admin interface + SSH must come ONLY from the allowed zone(s) — every
     # other zone (VPN, WAN, all VLANs) must be denied. One rule per source
     # zone + service (SonicWall duplicates these across destination interfaces).
-    off_zone = [r for r in mgmt if r["src_zone"] not in admin_zones]
+    # Rules sourced from the datacenter management object (current name or a
+    # legacy one such as 'GMS Addresses') are sanctioned: keep them. A rename
+    # is handled in its own task below, never a delete.
+    off_zone = [r for r in mgmt if r["src_zone"] not in admin_zones
+                and not is_dc_rule(r)]
     if off_zone:
         def _cmt(r):
             return (r.get("comment") or "").lower()
@@ -2141,9 +2831,12 @@ def remediation_items(cfg, union_cats, union_countries,
         if gms_r:
             step_no += 1
             lines += [
-                f"Step {step_no}: Disable GMS (see the 'Legacy GMS' task in "
-                f"this ticket). That removes these {len(gms_r)} rules "
-                "automatically:"]
+                f"Step {step_no}: These {len(gms_r)} GMS/NSM auto-created "
+                "rules come from a source other than the datacenter object. "
+                "In DEVICE > Settings > Administration (GMS/NSM settings) "
+                "point the management source at the RT Datacenter object; "
+                "the rules regenerate from that setting — do NOT hand-delete "
+                "them:"]
             lines += ["    - " + x for x in rules_specific(gms_r)]
             lines.append("")
         if other:
@@ -2166,6 +2859,47 @@ def remediation_items(cfg, union_cats, union_countries,
             "NIST SP 800-53 AC-6 (Least Privilege) & SC-7 (Boundary "
             "Protection); CIS Control 12.6 (dedicated/secure admin access); "
             "PCI DSS v4.0 Req 1.3 & 2.2.7; FFIEC Information Security.",
+            lines)
+
+    # Datacenter management rules still labelled with a legacy source name
+    # (e.g. the SonicWall default 'GMS Addresses' group): KEEP the rules and
+    # rename the object so they are identified correctly.
+    dc_name = RULES["management"].get("external_mgmt_source", "RT Datacenter")
+    legacy_names = RULES["management"].get("external_mgmt_legacy_names",
+                                           ["GMS Addresses"])
+    legacy_lc = {n.strip().lower() for n in legacy_names}
+    dc_legacy = [r for r in mgmt
+                 if (r["src_obj"] or "").strip().lower() in legacy_lc]
+    if dc_legacy:
+        old = " / ".join(sorted({r["src_obj"] for r in dc_legacy}))
+        lines = [
+            f"These rules are correct and must be KEPT — their source is the "
+            f"{dc_name} management addresses. Only the object's name is wrong.",
+            "",
+            f"Step 1: Rename the address group '{old}' to '{dc_name}'.",
+            "  1. OBJECT > Match Objects > Addresses > Address Groups tab.",
+            f"  2. Edit '{old}' and set Name: {dc_name}. Save.",
+            f"     (If SonicOS will not rename a default group, create a new "
+            f"Address Group named {dc_name} with the same members, then open "
+            f"each rule below and change ONLY its Source field to {dc_name}.)",
+            "",
+            f"Step 2: Check the group's members are only the {dc_name} "
+            "management addresses (remove any default 'GMS Address' / "
+            "'GMS Standby Address' placeholders).",
+            "",
+            f"Step 3: Confirm each of these {len(dc_legacy)} rule(s) now shows "
+            f"source = {dc_name}. Do NOT delete or disable them:"]
+        lines += ["    - " + x for x in rules_specific(dc_legacy)]
+        add("MEDIUM", "External management source",
+            f"Keep the {len(dc_legacy)} management rule(s) sourced from "
+            f"'{old}' and rename that address group to '{dc_name}':",
+            f"'{old}' is the {dc_name} — the sanctioned path for managing "
+            "this firewall from outside the LAN. The rules are legitimate, "
+            "but the legacy name misidentifies them as GMS remnants, so they "
+            "risk being removed during GMS cleanup and are hard to audit.",
+            "Client management standard (NSM / datacenter management); NIST "
+            "SP 800-53 CM-6 (Configuration Settings); CIS Control 4 (Secure "
+            "Configuration).",
             lines)
 
     # Any-source management from the ALLOWED zone (LAN) — including LAN SSH.
@@ -2225,20 +2959,55 @@ def remediation_items(cfg, union_cats, union_countries,
             "v4.0 Req 1.3.",
             rules_specific(broad))
 
-    if cfg["gms_enabled"]:
-        add("HIGH", "Legacy GMS",
-            "Disable legacy GMS management and manage the firewall via NSM "
-            "instead (DEVICE > Settings > Administration / GMS — turn off "
-            "'Enable management using GMS'; remove the GMS Addresses object "
-            "from any management rules).",
-            "GMS has been replaced by NSM across the fleet. A firewall still "
-            "configured for GMS (gmsServerEnable=on) has an unused legacy "
-            "management channel enabled and is inconsistent with the NSM "
-            "standard — that channel should be closed to reduce attack "
-            "surface and management drift.",
-            "Client management standard (NSM); NIST SP 800-53 CM-6 (Configu"
-            "ration Settings) & CM-7 (Least Functionality); CIS Control 4 "
-            "(Secure Configuration).")
+    if failed("NSM management implemented"):
+        nsm_rules = [r for r in mgmt if is_dc_rule(r)]
+        lines = []
+        step = 0
+        if not cfg["gms_enabled"]:
+            step += 1
+            lines += [
+                f"Step {step}: Enable NSM management on the firewall.",
+                "  1. DEVICE > Settings > Administration — GMS/NSM settings "
+                "(SonicOS uses the GMS settings for NSM management).",
+                "  2. Turn ON 'Enable management using GMS/NSM' and point it "
+                f"at the NSM server in the {dc_name}. Use the same management "
+                "mode as the rest of the fleet (copy it from a compliant "
+                "firewall).",
+                "  3. Save, then confirm the firewall shows as managed/online "
+                "in the NSM console.", ""]
+        if not nsm_rules:
+            step += 1
+            lines += [
+                f"Step {step}: Allow firewall management from the {dc_name}.",
+                f"  1. OBJECT > Match Objects > Addresses — make sure an "
+                f"Address Group named {dc_name} exists holding the datacenter "
+                "management addresses (copy its members from a compliant "
+                "firewall).",
+                "  2. POLICY > Rules and Policies > Access Rules — add (or "
+                "fix) the management rules: zone WAN (or VPN if NSM is reached "
+                "through the tunnel) -> WAN, services HTTPS Management and "
+                f"SSH Management, Source = {dc_name}, Destination = the "
+                "firewall's management IPs.",
+                "  3. Do NOT use 'Any' as the source — only the datacenter "
+                "object.", ""]
+        if lines and lines[-1] == "":
+            lines.pop()
+        add("HIGH", "Missing NSM rules",
+            f"Bring this firewall under NSM management from the {dc_name}: "
+            + " and ".join(
+                (["enable the GMS/NSM management channel"]
+                 if not cfg["gms_enabled"] else [])
+                + ([f"add the {dc_name} management rules"]
+                   if not nsm_rules else [])) + ".",
+            "The fleet is managed centrally by NSM from the RT Datacenter. A "
+            "firewall outside NSM does not receive the standard policy, "
+            "firmware and backup management the other firewalls get, so it "
+            "drifts out of compliance and cannot be audited or fixed "
+            "centrally.",
+            "Client management standard (NSM); NIST SP 800-53 CM-6 "
+            "(Configuration Settings) & CM-7 (Least Functionality); CIS "
+            "Control 4 (Secure Configuration).",
+            lines)
 
     vpn_user_zones = RULES.get("vpn_user_zones", ["SSLVPN"])
     zmap = {z["name"]: z for z in cfg["zones"]}
@@ -2361,6 +3130,9 @@ def remediation_items(cfg, union_cats, union_countries,
                and "Ping" not in r["service"]
                and not (r["dst_zone"] == TRUSTED_ZONE
                         and r["src_count"] is None)]
+    pf_red = [f for f in port_forwards(cfg) if f["level"] == "red"]
+    pf_rules = [r for f in pf_red for r in f["rules"]]
+    ext_red = [r for r in ext_red if r not in pf_rules]   # handled below
     if ext_red:
         add("HIGH", "External exposure",
             f"Restrict each of these {len(ext_red)} WAN-inbound services to "
@@ -2372,6 +3144,78 @@ def remediation_items(cfg, union_cats, union_countries,
             "Protection); CIS Control 12.",
             rules_specific(ext_red)
             + (["", AUTO_NOTE] if any(_is_auto(r) for r in ext_red) else []))
+
+    _, _, cov, vl = analyze(cfg)
+    planned = [r for r in VLAN_ROLES if _role_info(r).get("vlan") is not None]
+    missing = [r for r, m in cov if r in planned and not m]
+    unclassified = [v for v in vl if not any(v in m for _, m in cov)]
+    if missing or unclassified:
+        lines = []
+        if missing:
+            lines.append(f"Suggested VLANs not present on this firewall "
+                         f"({len(missing)} of {len(planned)}) — add each one "
+                         "the site has devices for, with the segmentation "
+                         "below:")
+            for r in missing:
+                info = _role_info(r)
+                lines.append(f"  - VLAN {info.get('vlan')}  {r} — "
+                             f"{info.get('purpose') or ''}")
+                if info.get("segmentation"):
+                    lines.append(f"      Segmentation: {info['segmentation']}")
+            lines.append("")
+        if unclassified:
+            lines.append("Configured VLANs that match no expected role — name "
+                         "them and classify (or remove if unused):")
+            for v in unclassified:
+                hint = _suggested_role_for_id(v["vlan"])
+                lines.append("  - " + _vlan_desc(v)
+                             + (f"   (suggested ID for {hint})" if hint else ""))
+        add("MEDIUM", "VLAN segmentation",
+            "Review this firewall's VLANs against the suggested VLAN plan: "
+            + " and ".join(
+                ([f"{len(missing)} suggested VLAN(s) are missing"] if missing
+                 else [])
+                + ([f"{len(unclassified)} configured VLAN(s) match no role"]
+                   if unclassified else [])) + ".",
+            "Segmenting devices by role (management, servers, users, phones, "
+            "printers, Wi-Fi, guest, IoT, CCTV, DMZ) limits lateral movement: "
+            "a compromised printer, camera or guest device cannot reach "
+            "servers or the management plane. Missing or unnamed VLANs mean "
+            "that segmentation is either absent or impossible to verify.",
+            "PCI DSS v4.0 Req 1.3 (network segmentation); NIST SP 800-53 "
+            "SC-7 (Boundary Protection) & AC-4; CIS Control 12; FFIEC "
+            "Information Security.",
+            lines)
+
+    if pf_red:
+        lines = []
+        for f in pf_red:
+            lines.append(
+                f"FORWARD: {f['ports']} on {f['public_ips'] or f['public']} "
+                f"({f['iface']} inbound)  =>  {f['target_ips'] or f['target']}"
+                + (f"   [NAT policy: {f['name']}]" if f["name"] else ""))
+            for r in f["rules"]:
+                if r["src_count"] is None:
+                    lines.append(f"  RULE: {rule_label(r)}")
+                    lines.append("     >>> CHANGE Source:  Any  =>  an address "
+                                 "object/group holding only the partner or "
+                                 "vendor IPs that need this service")
+            lines.append("")
+        lines += ["If nobody outside needs the service any more, remove the "
+                  "NAT policy (POLICY > Rules and Policies > NAT Rules) and "
+                  "its WAN access rule instead."]
+        add("HIGH", "Port forwards",
+            f"Restrict these {len(pf_red)} port forward(s) — each publishes "
+            "an internal host to the entire Internet. Edit the WAN access "
+            "rule and change ONLY its Source from Any to the known source IPs:",
+            "A port forward open to any source hands the internal server "
+            "straight to Internet-wide scanning and exploitation — the "
+            "firewall passes the traffic through to it. Limiting the source "
+            "to the partner/vendor IPs that need the service removes the "
+            "broad exposure without breaking the integration.",
+            "PCI DSS v4.0 Req 1.3 & 1.4; NIST SP 800-53 SC-7 (Boundary "
+            "Protection); CIS Control 12.",
+            lines)
 
     wanping = wan_ping_rules(cfg)
     if wanping:
@@ -2404,8 +3248,32 @@ def remediation_items(cfg, union_cats, union_countries,
             "attack-surface reduction / defense-in-depth.",
             lines)
 
-    r = st.get("SSL VPN configured -> DUO/Entra MFA required")
-    if r and r["status"] == "FAIL":
+    r = st.get("SSL VPN configured -> MFA required")
+    if r and r["status"] == "WARN":
+        vpn = cfg["vpn"]
+        add("MEDIUM", "VPN MFA (verify)",
+            "Confirm that multi-factor authentication is enforced for SSL VPN "
+            "logins — the export cannot prove it:",
+            "The firewall hands SSL VPN logins to a RADIUS server. A DUO "
+            "Authentication Proxy or an NPS server with an MFA extension looks "
+            "exactly like a plain RADIUS server in the config, so the audit "
+            "can only confirm MFA from the server side or from a SonicOS "
+            "one-time-password setting on the VPN user group.",
+            "FFIEC Authentication guidance (2021); PCI DSS v4.0 Req 8.4.2 & "
+            "8.5 (MFA for remote access); NIST SP 800-53 IA-2(1).",
+            [f"Current state: {vpn['mfa']}",
+             f"RADIUS server(s): {', '.join(vpn['radius_servers']) or 'none'}",
+             "",
+             "  1. Check what answers at that address: DUO Authentication "
+             "Proxy, NPS with the Entra MFA extension, or a plain RADIUS/NPS "
+             "server.",
+             "  2. If it enforces MFA: add its IP to vpn.mfa_radius_servers in "
+             "compliance_rules.json so the audit records MFA for this fleet.",
+             "  3. If it does NOT: add MFA — enable One-time passwords (TOTP) "
+             "on the SSL VPN user group (DEVICE > Users > Local Users & Groups "
+             "> edit the group > One-time passwords), or put the DUO "
+             "Authentication Proxy in front of the RADIUS server."])
+    elif r and r["status"] == "FAIL":
         add("HIGH", "VPN MFA",
             "SSL VPN is enabled but has NO multi-factor authentication. "
             "Choose ONE option:",
@@ -2417,8 +3285,11 @@ def remediation_items(cfg, union_cats, union_countries,
             "FFIEC Authentication guidance (2021); PCI DSS v4.0 Req 8.4.2 & "
             "8.5 (MFA for remote access); NIST SP 800-53 IA-2(1).",
             ["OPTION A  --  ADD MFA   (preferred)",
-             "  Require a second factor for every SSL VPN login using DUO or",
-             "  Entra ID:",
+             "  Require a second factor for every SSL VPN login using DUO,",
+             "  Entra ID, or the firewall's built-in one-time passwords:",
+             "    - TOTP:  DEVICE > Users > Local Users & Groups > edit the",
+             "             SSL VPN user group > One-time passwords: TOTP",
+             "             (users enrol an authenticator app at next login).",
              "    - DUO:   set up the DUO Authentication Proxy as a RADIUS",
              "             server, then point SSL VPN auth at it",
              "             (DEVICE > Users > Settings > Authentication, add the",
@@ -2434,8 +3305,20 @@ def remediation_items(cfg, union_cats, union_countries,
              "",
              "(Confirm the exact menu path for your SonicOS build.)"])
     r = st.get("VPN authentication integrated with AD/Entra")
-    if r and r["status"] == "FAIL":
-        add("MEDIUM", "Authentication",
+    if r and r["status"] == "WARN":
+        vpn = cfg["vpn"]
+        add("LOW", "VPN / MFA authentication (verify)",
+            f"Confirm the RADIUS server ({', '.join(vpn['radius_servers'])}) "
+            "is backed by Active Directory / Entra ID, so VPN accounts are "
+            "centrally managed and deprovisioned.",
+            "Users authenticate through RADIUS; the export does not show what "
+            "directory sits behind it. If it is a local user database, "
+            "accounts are not centrally managed, logged, or disabled at "
+            "termination.",
+            "FFIEC Information Security (access management); NIST SP 800-53 "
+            "AC-2 (Account Management); CIS Control 6.")
+    elif r and r["status"] == "FAIL":
+        add("MEDIUM", "VPN / MFA authentication",
             "Connect user authentication to Active Directory/LDAP or Entra "
             "ID (currently local users only).",
             "Local firewall accounts are not centrally managed, logged, or "
@@ -2488,9 +3371,11 @@ def remediation_items(cfg, union_cats, union_countries,
 DIV = "-" * 60
 
 
-def build_remediation(configs):
+def _remediation_sets(configs):
+    """Shared pre-computation for the remediation reports: the strictest
+    baseline, which firewall(s) block each category / country (provenance),
+    and each branch's LAN subnet."""
     union_cats, union_countries = strictest_baseline(configs)
-    # provenance: which firewall(s) block each category / country
     cat_blockers, country_blockers = {}, {}
     for c in configs:
         for cat in (c["cfs_profiles"][0]["blocked"] if c["cfs_profiles"]
@@ -2499,6 +3384,104 @@ def build_remediation(configs):
         for ctry in c["geo"]["blocked_countries"]:
             country_blockers.setdefault(ctry, []).append(c["fw_name"])
     branch_nets = {c["fw_name"]: c["lan_subnet"] for c in configs}
+    return (union_cats, union_countries, cat_blockers, country_blockers,
+            branch_nets)
+
+
+def build_remediation_summary(configs):
+    """One-page overview of the remediation work: per-firewall task counts,
+    a fix matrix (fixes every firewall shares vs. one-offs) and a compact
+    task list per firewall. Task numbers match the Remediation tickets,
+    which hold the full steps, options and standards."""
+    uc, un, cb, ctb, bn = _remediation_sets(configs)
+    per = [(c, remediation_items(c, uc, un, cb, ctb, bn)) for c in configs]
+    order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+    b = ["<p>Everything that needs fixing, at a glance. Each task below is "
+         "numbered exactly as in that firewall's <b>Remediation</b> ticket "
+         "(next step), which holds the full steps, options and standards.</p>"]
+
+    # ---- at a glance ----
+    b.append("<h2>At a glance</h2><table><tr><th>Firewall</th><th>HIGH</th>"
+             "<th>MEDIUM</th><th>LOW</th><th>Total tasks</th><th>Status</th>"
+             "</tr>")
+    tot = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    for c, items in per:
+        counts = {}
+        for it in items:
+            counts[it["pri"]] = counts.get(it["pri"], 0) + 1
+            tot[it["pri"]] += 1
+        cells = "".join(
+            f"<td><span class='pill {PRI_COLOR[p]}'>{counts[p]}</span></td>"
+            if counts.get(p) else "<td class='muted'>0</td>"
+            for p in ("HIGH", "MEDIUM", "LOW"))
+        status = ("<span class='pass'>&#10004; compliant</span>" if not items
+                  else f"<span class='fail'>{len(items)} task(s) open</span>")
+        b.append(f"<tr><td><b>{esc(label(c))}</b></td>{cells}"
+                 f"<td><b>{len(items)}</b></td><td>{status}</td></tr>")
+    total_all = sum(len(i) for _, i in per)
+    b.append(f"<tr><td><b>All firewalls</b></td><td><b>{tot['HIGH']}</b></td>"
+             f"<td><b>{tot['MEDIUM']}</b></td><td><b>{tot['LOW']}</b></td>"
+             f"<td><b>{total_all}</b></td><td></td></tr></table>")
+
+    # ---- fix matrix: which firewalls need each fix ----
+    areas = {}
+    for c, items in per:
+        for it in items:
+            a = areas.setdefault(it["area"], {"pri": it["pri"], "fws": {}})
+            if order[it["pri"]] < order[a["pri"]]:
+                a["pri"] = it["pri"]
+            a["fws"][c["fw_name"]] = a["fws"].get(c["fw_name"], 0) + 1
+    if areas:
+        b.append("<h2>Fix matrix</h2><small>Which firewalls need each fix. "
+                 "A fix needed on every firewall is a fleet-wide standard "
+                 "gap; a one-off is a single misconfiguration.</small>"
+                 "<table><tr><th>Fix</th><th>Priority</th>"
+                 + "".join(f"<th>{esc(label(c))}</th>" for c in configs)
+                 + "<th>Scope</th></tr>")
+        for area, a in sorted(areas.items(),
+                              key=lambda kv: (order[kv[1]["pri"]],
+                                              kv[0].lower())):
+            cells = ""
+            for c in configs:
+                n = a["fws"].get(c["fw_name"], 0)
+                cells += ("<td class='fail'>&#10006;"
+                          + (f" &times;{n}" if n > 1 else "") + "</td>"
+                          if n else "<td class='pass'>&#10004;</td>")
+            nf = len(a["fws"])
+            scope = ("all firewalls" if nf == len(configs)
+                     else f"{nf} of {len(configs)}")
+            b.append(f"<tr><td>{esc(area)}</td><td><span class='pill "
+                     f"{PRI_COLOR[a['pri']]}'>{a['pri']}</span></td>"
+                     f"{cells}<td>{scope}</td></tr>")
+        b.append("</table><p class='muted'><small>&#10006; = fix needed on "
+                 "that firewall (&times;n = several tasks in that area); "
+                 "&#10004; = not needed.</small></p>")
+
+    # ---- compact task list per firewall ----
+    b.append("<h2>Tasks per firewall</h2>")
+    for c, items in per:
+        b.append(f"<div class='card'><h3>{esc(label(c))}</h3>")
+        if not items:
+            b.append("<p class='pass'>&#10004; No remediation required."
+                     "</p></div>")
+            continue
+        b.append("<table><tr><th>#</th><th>Priority</th><th>Area</th>"
+                 "<th>What to do</th></tr>")
+        for n, it in enumerate(items, 1):
+            b.append(f"<tr><td>{n}</td><td><span class='pill "
+                     f"{PRI_COLOR[it['pri']]}'>{it['pri']}</span></td>"
+                     f"<td><b>{esc(it['area'])}</b></td>"
+                     f"<td>{esc(it['action'].rstrip(': '))}</td></tr>")
+        b.append("</table></div>")
+
+    return _page("SonicWall Remediation Summary",
+                 "Every fix per firewall at a glance — counts, shared fixes "
+                 "and task list", "".join(b))
+
+
+def build_remediation(configs):
+    (union_cats, union_countries, cat_blockers, country_blockers,
+     branch_nets) = _remediation_sets(configs)
     b = ["<p>One ticket per firewall, organized as remediation <b>tasks</b> "
          "(each task may contain numbered <b>Steps</b> to perform, or "
          "<b>Options</b> to choose between). Consistency tasks use the "
@@ -2654,11 +3637,22 @@ setTimeout(function(){URL.revokeObjectURL(url);},1000);}
 # ---------------------------------------------------------------------------
 def setup_rules():
     """Load compliance_rules.json and apply it to the module globals."""
-    global RULES, TRUSTED_ZONE, VLAN_ROLES, NON_CFS_ZONES
+    global RULES, TRUSTED_ZONE, VLAN_ROLES, VLAN_ROLE_INFO, NON_CFS_ZONES
     RULES = load_rules()
     TRUSTED_ZONE = RULES.get("trusted_zone", TRUSTED_ZONE)
-    if RULES.get("expected_vlan_roles"):
-        VLAN_ROLES = RULES["expected_vlan_roles"]
+    exp = RULES.get("expected_vlan_roles")
+    if isinstance(exp, list) and exp:          # suggested VLAN plan (rich)
+        VLAN_ROLES = {e["role"]: list(e.get("match") or [])
+                      for e in exp if e.get("role")}
+        VLAN_ROLE_INFO = {
+            e["role"]: {"vlan": e.get("vlan"),
+                        "purpose": e.get("purpose") or "",
+                        "segmentation": e.get("segmentation") or "",
+                        "exclude": [x.lower() for x in (e.get("exclude") or [])]}
+            for e in exp if e.get("role")}
+    elif isinstance(exp, dict) and exp:        # legacy {role: [patterns]}
+        VLAN_ROLES = exp
+        VLAN_ROLE_INFO = {}
     NON_CFS_ZONES = set(RULES.get("content_filter_exempt_zones",
                                   NON_CFS_ZONES))
 
@@ -2700,6 +3694,7 @@ def generate_reports(configs):
         "differences": build_differences(configs),
         "compliance": build_compliance(configs),
         "findings": build_findings(configs),
+        "summary": build_remediation_summary(configs),
         "remediation": build_remediation(configs),
     }
 
