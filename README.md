@@ -1,8 +1,16 @@
 # SonicWall EXP Comparison & Audit
 
+Built by [AuditHat.com](https://audithat.com) for **banks and credit unions**.
 Compares multiple SonicWall EXP config exports (same client) for **content
 filtering**, **IPS/IDS**, **VLAN inter-communication**, and **management access
 restrictions**, and produces colorized HTML reports.
+
+Every finding is tied to the standard it affects (PCI DSS, NIST SP 800-53, CIS
+Controls, FFIEC Information Security), so the remediation tickets double as
+examiner-ready evidence. The tool is built to help institutions **maintain
+FFIEC and GLBA compliance between exams**, not just pass one: run it after every
+firewall change, hand the ticket list to whoever makes the fix, re-run to
+confirm.
 
 Repo: https://github.com/ryanerb4/SonicWall-Firewall-EXP-Config-Standards-Analyzer
 
@@ -12,6 +20,35 @@ git clone https://github.com/ryanerb4/SonicWall-Firewall-EXP-Config-Standards-An
 cd SonicWall-Firewall-EXP-Config-Standards-Analyzer
 ```
 Python 3 only — no third-party packages required.
+
+## What the reports look like
+The repo ships a **fictional sample data set**: three firewalls for an invented
+community bank (`HQ-Main`, `Branch-Downtown`, `Branch-Westside`). HQ is a
+hardened reference config; the two branches carry typical findings (open
+management, an RDP port forward from the Internet, no VPN MFA, an expired
+license, legacy "Any" rules). Nothing in it comes from a real firewall; public
+IPs use the RFC 5737 documentation ranges.
+
+- `samples/exp/*.zip`: the synthetic EXP exports. Upload them in the web app
+  (or drop them in `input/`) to see a full analysis in seconds.
+- `samples/reports/*.html`: the five reports the tool produced from them.
+- `samples/screenshots/*.png`: full-page captures of each report.
+- `python3 samples/make_samples.py` regenerates all of the above
+  (`--screenshots` also re-captures the PNGs with headless Chrome).
+
+**Web app, analysis screen** (remediation summary shown first):
+
+<img src="samples/screenshots/app-analysis.png" width="100%" alt="Web app analysis screen showing the remediation summary for three sample firewalls">
+
+Click a thumbnail for the full-page capture:
+
+| Remediation summary | Compliance matrix |
+|---|---|
+| [<img src="samples/screenshots/summary.png" width="440" alt="Remediation summary report">](samples/screenshots/summary.png) | [<img src="samples/screenshots/compliance.png" width="440" alt="Compliance report with pass/fail matrix">](samples/screenshots/compliance.png) |
+| **Findings** (checklist, risk findings, open ports) | **Differences** (zones, VLAN plan, licenses side by side) |
+| [<img src="samples/screenshots/findings.png" width="440" alt="Findings report">](samples/screenshots/findings.png) | [<img src="samples/screenshots/differences.png" width="440" alt="Differences report">](samples/screenshots/differences.png) |
+| **Remediation tickets** (steps, why, standard) | **Web app home** (analysis history) |
+| [<img src="samples/screenshots/remediation.png" width="440" alt="Remediation tickets report">](samples/screenshots/remediation.png) | [<img src="samples/screenshots/app-home.png" width="440" alt="Web app home screen">](samples/screenshots/app-home.png) |
 
 ## Web app (recommended)
 ```

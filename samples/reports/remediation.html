@@ -1,0 +1,556 @@
+<!doctype html><meta charset='utf-8'><title>SonicWall Remediation Tickets</title>
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+     margin:0;background:#f6f7f9;color:#1c2530}
+header{background:#0b2540;color:#fff;padding:22px 28px}
+header h1{margin:0;font-size:20px}
+header .sub{opacity:.8;font-size:13px;margin-top:4px}
+main{max-width:1150px;margin:0 auto;padding:24px 28px 60px}
+h2{font-size:16px;margin:32px 0 10px;border-bottom:2px solid #e2e6ea;
+   padding-bottom:6px}
+table{border-collapse:collapse;width:100%;background:#fff;font-size:13px;
+      box-shadow:0 1px 2px rgba(0,0,0,.06);margin-bottom:8px}
+th,td{border:1px solid #e2e6ea;padding:7px 10px;text-align:left;
+      vertical-align:top}
+th{background:#eef1f4;font-weight:600}
+tr:nth-child(even) td{background:#fafbfc}
+.diff{background:#fff4e0 !important}
+.pass{color:#0a7f3f;font-weight:700}.fail{color:#c0392b;font-weight:700}
+.review{color:#b8860b;font-weight:700}
+.pill{display:inline-block;padding:3px 11px;border-radius:12px;font-size:11px;
+      font-weight:700;color:#fff;white-space:nowrap}
+.green{background:#0a7f3f}.red{background:#c0392b}.orange{background:#d98324}
+.gray{background:#6b7a8f}
+td.cell{text-align:center;font-weight:700;font-size:20px;line-height:1;
+        width:130px;background:#fff !important}
+.sym-green{color:#0a7f3f}.sym-red{color:#c0392b}
+.sym-orange{color:#d98324}.sym-gray{color:#aab4bf}
+.lg{display:inline-block;width:20px;text-align:center;font-weight:700;
+    font-size:16px;vertical-align:middle}
+.score{display:inline-block;padding:4px 12px;border-radius:14px;font-weight:700;
+       color:#fff;margin-right:6px;font-size:13px}
+.copybtn{background:#0b2540;color:#fff;border:0;padding:8px 14px;
+         border-radius:6px;cursor:pointer;font-size:13px;margin-top:8px}
+.copybtn:hover{background:#123a63}
+tr.r-red td{background:#fdecea !important}
+tr.r-orange td{background:#fdf3e3 !important}
+tr.r-green td{background:#eaf6ef !important}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;
+       font-weight:700;color:#fff}
+.CRITICAL{background:#7b1113}.HIGH{background:#c0392b}
+.MEDIUM{background:#d98324}.LOW{background:#6b7a8f}
+.on{color:#0a7f3f;font-weight:600}.off{color:#c0392b;font-weight:600}
+.muted{color:#7a8794}
+.card{background:#fff;border:1px solid #e2e6ea;border-radius:8px;padding:16px;
+      margin-bottom:18px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.card h3{margin:0 0 12px;font-size:15px}
+small{color:#7a8794}
+</style>
+<header><div style='font-size:11px;letter-spacing:2.5px;font-weight:700;color:#9fc3ec;margin-bottom:6px'>AUDITHAT.COM</div><h1>SonicWall Remediation Tickets</h1><div class='sub'>Per-firewall remediation tickets — tasks, steps &amp; options</div></header><main><p>One ticket per firewall, organized as remediation <b>tasks</b> (each task may contain numbered <b>Steps</b> to perform, or <b>Options</b> to choose between). Consistency tasks use the strictest firewall as the baseline. Use <b>Copy ticket text</b> to paste a firewall's full ticket into your ticketing system.</p><div class='card' style='padding:0;overflow:hidden'><div style='background:#0b2540;color:#fff;padding:16px 20px'><div style='font-size:19px;font-weight:700'>Branch-Downtown</div><div style='opacity:.75;font-size:12.5px;margin-top:3px'>TZ 270 &nbsp;·&nbsp; serial 0017C5B00002</div></div><div style='padding:16px 20px'><p style='margin:0 0 4px'><span class='pill red'>8 HIGH</span> <span class='pill orange'>5 MEDIUM</span> &nbsp;<b>13 tasks</b></p><div id='doc0'><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>1</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Management plane isolation<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 1 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Only LAN may manage this firewall. Right now 1 rules let other zones (VPN, WAN, VLANs) reach the admin interface or SSH. Fix them in the order below:</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>Do these in order. Most of these rules are auto-created by SonicWall, so a few settings changes clear almost all of them — you do NOT delete 30+ rules by hand.
+
+Step 1: Delete (or set Action = Deny) these 1 remaining rule(s) by hand.
+  Go to POLICY &gt; Rules and Policies &gt; Access Rules, find each one by its zone pair + service, and delete it:
+    - GUEST -&gt; LAN  |  service: HTTPS Management  |  source: Any  |  destination: All X0 Management IP</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> The firewall&#x27;s own management plane must be isolated. Any VPN user or device on a segmented VLAN that can reach the admin GUI or SSH can attack the firewall itself — a single compromised VPN session or VLAN host would defeat all segmentation. Only the LAN zone may manage the device.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> NIST SP 800-53 AC-6 (Least Privilege) &amp; SC-7 (Boundary Protection); CIS Control 12.6 (dedicated/secure admin access); PCI DSS v4.0 Req 1.3 &amp; 2.2.7; FFIEC Information Security.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>2</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Management (incl. SSH) source restriction<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 2 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Restrict LAN admin + SSH access to the jumpbox only (the host running the Connect Secure agent). Currently these 2 rules allow &#x27;Any&#x27; source:</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>Step 1: Create the admin source object (once).
+  1. OBJECT &gt; Match Objects &gt; Addresses &gt; Add.
+  2. Name: Mgmt-Jumpbox   Zone: LAN   Type: Host.
+  3. IP address: the jumpbox IP — the jumpbox that runs the Connect Secure agent. Save.
+     (If there are two admin hosts, make an Address GROUP named Mgmt-Jumpbox containing both — max 2.)
+
+Step 2: Open each of these 2 LAN admin/SSH rules (POLICY &gt; Rules and Policies &gt; Access Rules) and change ONLY the Source field to Mgmt-Jumpbox, so only the Connect Secure agent on the jumpbox can reach the firewall. Each rule and its exact change is listed below:
+
+  RULE: LAN -&gt; LAN  |  HTTPS Management  |  destination: All X0 Management IP   [auto-created]
+     &gt;&gt;&gt; CHANGE Source:  Any  =&gt;  Mgmt-Jumpbox
+
+  RULE: LAN -&gt; LAN  |  SSH Management  |  destination: All X0 Management IP   [auto-created]
+     &gt;&gt;&gt; CHANGE Source:  Any  =&gt;  Mgmt-Jumpbox
+
+(These are auto-added management rules, but here you EDIT their Source field rather than delete them — keep management enabled on LAN, just lock the source to the jumpbox. The restriction persists.)</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> An &#x27;Any&#x27; source exposes the firewall admin interface and SSH to every host in that zone. Restricting the source to the jumpbox address object means only the Connect Secure agent can manage the firewall. SSH in particular must be limited to at most 2 admin IPs.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> PCI DSS v4.0 Req 1.3 &amp; 2.2.7; NIST SP 800-53 AC-6 (Least Privilege) &amp; SC-7; CIS Control 12.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>3</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>VPN user isolation (user-to-user)<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 3 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Block VPN-user-to-VPN-user traffic — turn OFF intra-zone communication on the SSLVPN zone(s):</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>OBJECT &gt; Zones &gt; edit the SSLVPN zone &gt; set &#x27;Allow Interface Trust&#x27; / intra-zone communication to OFF (deny).</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> Every remote VPN user lands in this zone. With intra-zone communication on, one compromised remote session can scan and attack every other remote user directly. Turning it off confines each session to its own path to the servers it needs.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> NIST SP 800-53 SC-7 (Boundary Protection) &amp; AC-4 (Information Flow Enforcement); CIS Control 12; PCI DSS v4.0 Req 1.3.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>4</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>LAN-to-VPN-user isolation<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 4 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Remove (or set to DENY) these 1 rules that let the LAN initiate connections TO VPN users (SSLVPN):</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>LAN -&gt; SSLVPN  |  service: Any  |  source: Any  |  destination: Any</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> Remote VPN users reaching LAN servers is expected and stays allowed. But the LAN initiating connections back TO remote user devices is not needed and only gives an attacker on the LAN a path to remote endpoints. Keep SSLVPN-&gt;LAN; block LAN-&gt;SSLVPN.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> NIST SP 800-53 SC-7 &amp; AC-4 (Information Flow); CIS Control 12; PCI DSS v4.0 Req 1.3.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>5</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Trusted LAN<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 5 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Review and remove/deny each of these 3 rules that let a NON-trusted zone reach the LAN. (Trusted zones LAN/SSLVPN — including SSL VPN remote users — are allowed and are not listed.)</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>VPN -&gt; LAN  |  service: Any  |  source: HQ LAN  |  destination: LAN Subnets
+WAN -&gt; LAN  |  service: RDP  |  source: Any  |  destination: WAN Interface IP
+WAN -&gt; LAN  |  service: SMTP  |  source: Spam-Filter-Cloud  |  destination: WAN Interface IP</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> The trusted LAN holds the institution&#x27;s core systems. A non-trusted segment (printers, phones, IoT, cameras, site-to-site VPN) permitted into it breaks segmentation and lets a compromised segment pivot into core banking systems. SSL VPN users are trusted and keep their LAN access.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> PCI DSS v4.0 Req 1.3 &amp; 1.4 (network segmentation); NIST SP 800-53 SC-7; CIS Control 12; FFIEC Information Security.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>6</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Branch-to-branch VPN (WAN -&gt; LAN)<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 6 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Pin these 1 WAN -&gt; LAN rules to the known branch subnets — source = other branches&#x27; LANs, destination = this branch&#x27;s LAN (10.20.10.0/24). They must never be &#x27;Any&#x27;:</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>These rules carry branch-to-branch VPN traffic but currently accept ANY source to ANY/WAN-IP destination. We know every branch&#x27;s LAN subnet from their configs, so pin BOTH ends:
+  source      = the OTHER branches&#x27; LANs
+  destination = THIS branch&#x27;s LAN (10.20.10.0/24)
+
+Step 1: Create a Network object for each OTHER branch&#x27;s LAN (OBJECT &gt; Match Objects &gt; Addresses &gt; Add; Type: Network):
+    - Name: Branch-Westside-LAN   Network: 10.30.10.0   Mask: 255.255.255.0   (= 10.30.10.0/24)
+    - Name: HQ-Main-LAN   Network: 10.10.10.0   Mask: 255.255.255.0   (= 10.10.10.0/24)
+
+Step 2: Create an Address GROUP named &#x27;Branch-Trusted-Nets&#x27; and add every Step 1 object. (This is the SOURCE for all the rules below.)
+
+Step 3: Edit each rule below — set BOTH its Source and Destination. This branch&#x27;s LAN is the built-in &#x27;LAN Primary Subnet&#x27; object (= 10.20.10.0/24):
+  RULE: WAN -&gt; LAN | service: RDP
+     &gt;&gt;&gt; Source:       Any  =&gt;  Branch-Trusted-Nets
+     &gt;&gt;&gt; Destination:  WAN Interface IP  =&gt;  LAN Primary Subnet   (= 10.20.10.0/24)</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> A WAN -&gt; LAN rule with an &#x27;Any&#x27; source (and &#x27;Any&#x27;/WAN-IP destination) lets the entire Internet into the trusted LAN, not just the sister branches. Because every branch&#x27;s LAN subnet is known from its config, both ends can be pinned exactly: only the sister branches&#x27; LANs reach only this branch&#x27;s LAN.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> PCI DSS v4.0 Req 1.2/1.3 (restrict inbound to that required); NIST SP 800-53 SC-7 (Boundary Protection); CIS Control 12.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>7</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Port forwards<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 7 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Restrict these 1 port forward(s) — each publishes an internal host to the entire Internet. Edit the WAN access rule and change ONLY its Source from Any to the known source IPs:</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>FORWARD: TCP 3389 on 203.0.113.18 (X1 inbound)  =&gt;  10.20.30.41   [NAT policy: RDP to teller PC]
+  RULE: WAN -&gt; LAN  |  service: RDP  |  source: Any  |  destination: WAN Interface IP
+     &gt;&gt;&gt; CHANGE Source:  Any  =&gt;  an address object/group holding only the partner or vendor IPs that need this service
+
+If nobody outside needs the service any more, remove the NAT policy (POLICY &gt; Rules and Policies &gt; NAT Rules) and its WAN access rule instead.</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> A port forward open to any source hands the internal server straight to Internet-wide scanning and exploitation — the firewall passes the traffic through to it. Limiting the source to the partner/vendor IPs that need the service removes the broad exposure without breaking the integration.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> PCI DSS v4.0 Req 1.3 &amp; 1.4; NIST SP 800-53 SC-7 (Boundary Protection); CIS Control 12.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>8</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>VPN MFA<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 8 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> SSL VPN is enabled but has NO multi-factor authentication. Choose ONE option:</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>OPTION A  --  ADD MFA   (preferred)
+  Require a second factor for every SSL VPN login using DUO,
+  Entra ID, or the firewall&#x27;s built-in one-time passwords:
+    - TOTP:  DEVICE &gt; Users &gt; Local Users &amp; Groups &gt; edit the
+             SSL VPN user group &gt; One-time passwords: TOTP
+             (users enrol an authenticator app at next login).
+    - DUO:   set up the DUO Authentication Proxy as a RADIUS
+             server, then point SSL VPN auth at it
+             (DEVICE &gt; Users &gt; Settings &gt; Authentication, add the
+             RADIUS server; assign it to the SSL VPN user domain).
+    - Entra: configure SAML/SSO to Entra ID and apply it to the
+             SSL VPN portal (DEVICE &gt; Users &gt; Settings &gt; SSO/SAML).
+
+OPTION B  --  DISABLE SSL VPN   (if MFA will NOT be added)
+  Turn SSL VPN off until MFA is in place:
+    - NETWORK &gt; SSL VPN &gt; Server Settings &gt; uncheck the WAN (and
+      any other) zone under &#x27;SSL VPN Server&#x27;, and disable the
+      SSL VPN user portal.
+
+(Confirm the exact menu path for your SonicOS build.)</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> SSL VPN grants remote access to the internal network. Password-only remote access is a leading breach cause; MFA stops stolen credentials from turning into remote network access. If MFA cannot be added, the safer posture is to turn SSL VPN off rather than run remote access on single-factor passwords.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> FFIEC Authentication guidance (2021); PCI DSS v4.0 Req 8.4.2 &amp; 8.5 (MFA for remote access); NIST SP 800-53 IA-2(1).</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fdf3e3;border-left:6px solid #d98324'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#d98324;color:#fff;font-weight:700;font-size:14px'>9</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>External management source<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 9 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#d98324;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>MEDIUM</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Keep the 1 management rule(s) sourced from &#x27;GMS Addresses&#x27; and rename that address group to &#x27;RT Datacenter&#x27;:</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>These rules are correct and must be KEPT — their source is the RT Datacenter management addresses. Only the object&#x27;s name is wrong.
+
+Step 1: Rename the address group &#x27;GMS Addresses&#x27; to &#x27;RT Datacenter&#x27;.
+  1. OBJECT &gt; Match Objects &gt; Addresses &gt; Address Groups tab.
+  2. Edit &#x27;GMS Addresses&#x27; and set Name: RT Datacenter. Save.
+     (If SonicOS will not rename a default group, create a new Address Group named RT Datacenter with the same members, then open each rule below and change ONLY its Source field to RT Datacenter.)
+
+Step 2: Check the group&#x27;s members are only the RT Datacenter management addresses (remove any default &#x27;GMS Address&#x27; / &#x27;GMS Standby Address&#x27; placeholders).
+
+Step 3: Confirm each of these 1 rule(s) now shows source = RT Datacenter. Do NOT delete or disable them:
+    - WAN -&gt; WAN  |  service: HTTPS Management  |  source: GMS Addresses  |  destination: WAN Interface IP   [auto-created]</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> &#x27;GMS Addresses&#x27; is the RT Datacenter — the sanctioned path for managing this firewall from outside the LAN. The rules are legitimate, but the legacy name misidentifies them as GMS remnants, so they risk being removed during GMS cleanup and are hard to audit.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> Client management standard (NSM / datacenter management); NIST SP 800-53 CM-6 (Configuration Settings); CIS Control 4 (Secure Configuration).</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fdf3e3;border-left:6px solid #d98324'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#d98324;color:#fff;font-weight:700;font-size:14px'>10</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>VLAN segmentation<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 10 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#d98324;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>MEDIUM</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Review this firewall&#x27;s VLANs against the suggested VLAN plan: 5 suggested VLAN(s) are missing and 1 configured VLAN(s) match no role.</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>Suggested VLANs not present on this firewall (5 of 10) — add each one the site has devices for, with the segmentation below:
+  - VLAN 10  Management — Firewalls, switches, APs, mgmt interfaces
+      Segmentation: Most restricted. Permit only from admin/jump box; deny from User, Guest, IoT. No inbound internet; outbound to vendor update sources only.
+  - VLAN 20  Servers — On-prem physical &amp; virtual servers
+      Segmentation: Allow only required ports from User VLAN. No inbound from Guest/IoT. No direct inbound internet; publish externally via reverse proxy / DMZ.
+  - VLAN 60  Wireless — Corporate — Trusted staff Wi-Fi
+      Segmentation: Treat as trusted user VLAN. 802.1X or strong PSK. Same server access policy as wired users.
+  - VLAN 80  IoT / BYOD — Smart devices, thermostats, BYOD (incl. HVAC, postage meters)
+      Segmentation: Isolate from corporate. Internet limited to required cloud endpoints. Deny access to Servers, Mgmt, Workstations.
+  - VLAN 100  DMZ — Public-facing / published services
+      Segmentation: Strict firewall both directions. Deny initiation into internal VLANs; internal reaches DMZ on required ports only.
+
+Configured VLANs that match no expected role — name them and classify (or remove if unused):
+  - VLAN 150 · X0:V150 · zone LAN · 10.20.150.1/24</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> Segmenting devices by role (management, servers, users, phones, printers, Wi-Fi, guest, IoT, CCTV, DMZ) limits lateral movement: a compromised printer, camera or guest device cannot reach servers or the management plane. Missing or unnamed VLANs mean that segmentation is either absent or impossible to verify.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> PCI DSS v4.0 Req 1.3 (network segmentation); NIST SP 800-53 SC-7 (Boundary Protection) &amp; AC-4; CIS Control 12; FFIEC Information Security.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fdf3e3;border-left:6px solid #d98324'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#d98324;color:#fff;font-weight:700;font-size:14px'>11</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Ping / ICMP (WAN)<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 11 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#d98324;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>MEDIUM</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Stop the firewall answering ping from the Internet (1 WAN Ping rule(s) currently respond to any source). Keep internal (LAN) ping enabled:</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>DO THIS (one action): NETWORK &gt; Interfaces &gt; edit each WAN interface &gt; Management tab &gt; UNcheck &#x27;Ping&#x27;. Apply.
+  Leave &#x27;Ping&#x27; ENABLED on the LAN interface — internal ping is fine and useful for monitoring.
+
+Then delete (or set to DENY) any Ping rule that remains:
+    - WAN -&gt; WAN  |  service: Ping  |  source: Any  |  destination: WAN Interface IP</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> Answering ICMP echo from the Internet lets attackers discover and confirm the firewall&#x27;s public IPs during reconnaissance. Internal ping from the LAN is fine; only the Internet-facing ping response should be turned off.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> NIST SP 800-53 SC-7 (Boundary Protection); CIS Control 12; attack-surface reduction / defense-in-depth.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fdf3e3;border-left:6px solid #d98324'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#d98324;color:#fff;font-weight:700;font-size:14px'>12</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Content Filter<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 12 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#d98324;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>MEDIUM</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Block these 3 content-filter categories (already blocked on other firewalls of this client — the source firewall is shown in brackets after each):</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>Freeware/Software Downloads  [blocked on: Branch-Westside, HQ-Main]
+Gambling  [blocked on: Branch-Westside, HQ-Main]
+Games  [blocked on: Branch-Westside, HQ-Main]</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> All of this client&#x27;s firewalls should enforce the same web filtering. These categories are blocked on peer firewalls but not here, leaving a protection gap only at this site.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> Client security standardization policy; CIS Control 9; FFIEC (consistent control baseline across locations).</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fdf3e3;border-left:6px solid #d98324'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#d98324;color:#fff;font-weight:700;font-size:14px'>13</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Geo-IP<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 13 of 13</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#d98324;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>MEDIUM</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Add these 3 countries to the Geo-IP block list (already blocked on other firewalls of this client — the source firewall is shown in brackets after each):</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>Belarus  [blocked on: Branch-Westside, HQ-Main]
+Nigeria  [blocked on: Branch-Westside, HQ-Main]
+Venezuela  [blocked on: Branch-Westside, HQ-Main]</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> Uniform geo-blocking across all sites gives consistent defense-in-depth against high-risk/sanctioned regions. These countries are blocked elsewhere but reachable here.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> Client security standardization policy; supports OFAC sanctions posture &amp; FFIEC risk-based controls.</div></div></div></div><div style='margin-top:16px'><button class='copybtn' onclick="copyTicket(0)">&#128203; Copy ticket text</button> <button class='copybtn' onclick="downloadDoc(0)">&#11015; Download Word (.doc)</button></div><textarea id='tick0' style='display:none'>------------------------------------------------------------
+REMEDIATION TICKET — Branch-Downtown (TZ 270, serial 0017C5B00002)
+13 remediation tasks (8 HIGH, 5 MEDIUM)
+------------------------------------------------------------
+
+------------------------------------------------------------
+TASK 1 of 13  —  [HIGH]  Management plane isolation
+------------------------------------------------------------
+What to do: Only LAN may manage this firewall. Right now 1 rules let other zones (VPN, WAN, VLANs) reach the admin interface or SSH. Fix them in the order below:
+Do these in order. Most of these rules are auto-created by SonicWall, so a few settings changes clear almost all of them — you do NOT delete 30+ rules by hand.
+
+Step 1: Delete (or set Action = Deny) these 1 remaining rule(s) by hand.
+  Go to POLICY &gt; Rules and Policies &gt; Access Rules, find each one by its zone pair + service, and delete it:
+    - GUEST -&gt; LAN  |  service: HTTPS Management  |  source: Any  |  destination: All X0 Management IP
+
+Why: The firewall&#x27;s own management plane must be isolated. Any VPN user or device on a segmented VLAN that can reach the admin GUI or SSH can attack the firewall itself — a single compromised VPN session or VLAN host would defeat all segmentation. Only the LAN zone may manage the device.
+Standard failing: NIST SP 800-53 AC-6 (Least Privilege) &amp; SC-7 (Boundary Protection); CIS Control 12.6 (dedicated/secure admin access); PCI DSS v4.0 Req 1.3 &amp; 2.2.7; FFIEC Information Security.
+
+------------------------------------------------------------
+TASK 2 of 13  —  [HIGH]  Management (incl. SSH) source restriction
+------------------------------------------------------------
+What to do: Restrict LAN admin + SSH access to the jumpbox only (the host running the Connect Secure agent). Currently these 2 rules allow &#x27;Any&#x27; source:
+Step 1: Create the admin source object (once).
+  1. OBJECT &gt; Match Objects &gt; Addresses &gt; Add.
+  2. Name: Mgmt-Jumpbox   Zone: LAN   Type: Host.
+  3. IP address: the jumpbox IP — the jumpbox that runs the Connect Secure agent. Save.
+     (If there are two admin hosts, make an Address GROUP named Mgmt-Jumpbox containing both — max 2.)
+
+Step 2: Open each of these 2 LAN admin/SSH rules (POLICY &gt; Rules and Policies &gt; Access Rules) and change ONLY the Source field to Mgmt-Jumpbox, so only the Connect Secure agent on the jumpbox can reach the firewall. Each rule and its exact change is listed below:
+
+  RULE: LAN -&gt; LAN  |  HTTPS Management  |  destination: All X0 Management IP   [auto-created]
+     &gt;&gt;&gt; CHANGE Source:  Any  =&gt;  Mgmt-Jumpbox
+
+  RULE: LAN -&gt; LAN  |  SSH Management  |  destination: All X0 Management IP   [auto-created]
+     &gt;&gt;&gt; CHANGE Source:  Any  =&gt;  Mgmt-Jumpbox
+
+(These are auto-added management rules, but here you EDIT their Source field rather than delete them — keep management enabled on LAN, just lock the source to the jumpbox. The restriction persists.)
+
+Why: An &#x27;Any&#x27; source exposes the firewall admin interface and SSH to every host in that zone. Restricting the source to the jumpbox address object means only the Connect Secure agent can manage the firewall. SSH in particular must be limited to at most 2 admin IPs.
+Standard failing: PCI DSS v4.0 Req 1.3 &amp; 2.2.7; NIST SP 800-53 AC-6 (Least Privilege) &amp; SC-7; CIS Control 12.
+
+------------------------------------------------------------
+TASK 3 of 13  —  [HIGH]  VPN user isolation (user-to-user)
+------------------------------------------------------------
+What to do: Block VPN-user-to-VPN-user traffic — turn OFF intra-zone communication on the SSLVPN zone(s):
+OBJECT &gt; Zones &gt; edit the SSLVPN zone &gt; set &#x27;Allow Interface Trust&#x27; / intra-zone communication to OFF (deny).
+
+Why: Every remote VPN user lands in this zone. With intra-zone communication on, one compromised remote session can scan and attack every other remote user directly. Turning it off confines each session to its own path to the servers it needs.
+Standard failing: NIST SP 800-53 SC-7 (Boundary Protection) &amp; AC-4 (Information Flow Enforcement); CIS Control 12; PCI DSS v4.0 Req 1.3.
+
+------------------------------------------------------------
+TASK 4 of 13  —  [HIGH]  LAN-to-VPN-user isolation
+------------------------------------------------------------
+What to do: Remove (or set to DENY) these 1 rules that let the LAN initiate connections TO VPN users (SSLVPN):
+LAN -&gt; SSLVPN  |  service: Any  |  source: Any  |  destination: Any
+
+Why: Remote VPN users reaching LAN servers is expected and stays allowed. But the LAN initiating connections back TO remote user devices is not needed and only gives an attacker on the LAN a path to remote endpoints. Keep SSLVPN-&gt;LAN; block LAN-&gt;SSLVPN.
+Standard failing: NIST SP 800-53 SC-7 &amp; AC-4 (Information Flow); CIS Control 12; PCI DSS v4.0 Req 1.3.
+
+------------------------------------------------------------
+TASK 5 of 13  —  [HIGH]  Trusted LAN
+------------------------------------------------------------
+What to do: Review and remove/deny each of these 3 rules that let a NON-trusted zone reach the LAN. (Trusted zones LAN/SSLVPN — including SSL VPN remote users — are allowed and are not listed.)
+VPN -&gt; LAN  |  service: Any  |  source: HQ LAN  |  destination: LAN Subnets
+WAN -&gt; LAN  |  service: RDP  |  source: Any  |  destination: WAN Interface IP
+WAN -&gt; LAN  |  service: SMTP  |  source: Spam-Filter-Cloud  |  destination: WAN Interface IP
+
+Why: The trusted LAN holds the institution&#x27;s core systems. A non-trusted segment (printers, phones, IoT, cameras, site-to-site VPN) permitted into it breaks segmentation and lets a compromised segment pivot into core banking systems. SSL VPN users are trusted and keep their LAN access.
+Standard failing: PCI DSS v4.0 Req 1.3 &amp; 1.4 (network segmentation); NIST SP 800-53 SC-7; CIS Control 12; FFIEC Information Security.
+
+------------------------------------------------------------
+TASK 6 of 13  —  [HIGH]  Branch-to-branch VPN (WAN -&gt; LAN)
+------------------------------------------------------------
+What to do: Pin these 1 WAN -&gt; LAN rules to the known branch subnets — source = other branches&#x27; LANs, destination = this branch&#x27;s LAN (10.20.10.0/24). They must never be &#x27;Any&#x27;:
+These rules carry branch-to-branch VPN traffic but currently accept ANY source to ANY/WAN-IP destination. We know every branch&#x27;s LAN subnet from their configs, so pin BOTH ends:
+  source      = the OTHER branches&#x27; LANs
+  destination = THIS branch&#x27;s LAN (10.20.10.0/24)
+
+Step 1: Create a Network object for each OTHER branch&#x27;s LAN (OBJECT &gt; Match Objects &gt; Addresses &gt; Add; Type: Network):
+    - Name: Branch-Westside-LAN   Network: 10.30.10.0   Mask: 255.255.255.0   (= 10.30.10.0/24)
+    - Name: HQ-Main-LAN   Network: 10.10.10.0   Mask: 255.255.255.0   (= 10.10.10.0/24)
+
+Step 2: Create an Address GROUP named &#x27;Branch-Trusted-Nets&#x27; and add every Step 1 object. (This is the SOURCE for all the rules below.)
+
+Step 3: Edit each rule below — set BOTH its Source and Destination. This branch&#x27;s LAN is the built-in &#x27;LAN Primary Subnet&#x27; object (= 10.20.10.0/24):
+  RULE: WAN -&gt; LAN | service: RDP
+     &gt;&gt;&gt; Source:       Any  =&gt;  Branch-Trusted-Nets
+     &gt;&gt;&gt; Destination:  WAN Interface IP  =&gt;  LAN Primary Subnet   (= 10.20.10.0/24)
+
+Why: A WAN -&gt; LAN rule with an &#x27;Any&#x27; source (and &#x27;Any&#x27;/WAN-IP destination) lets the entire Internet into the trusted LAN, not just the sister branches. Because every branch&#x27;s LAN subnet is known from its config, both ends can be pinned exactly: only the sister branches&#x27; LANs reach only this branch&#x27;s LAN.
+Standard failing: PCI DSS v4.0 Req 1.2/1.3 (restrict inbound to that required); NIST SP 800-53 SC-7 (Boundary Protection); CIS Control 12.
+
+------------------------------------------------------------
+TASK 7 of 13  —  [HIGH]  Port forwards
+------------------------------------------------------------
+What to do: Restrict these 1 port forward(s) — each publishes an internal host to the entire Internet. Edit the WAN access rule and change ONLY its Source from Any to the known source IPs:
+FORWARD: TCP 3389 on 203.0.113.18 (X1 inbound)  =&gt;  10.20.30.41   [NAT policy: RDP to teller PC]
+  RULE: WAN -&gt; LAN  |  service: RDP  |  source: Any  |  destination: WAN Interface IP
+     &gt;&gt;&gt; CHANGE Source:  Any  =&gt;  an address object/group holding only the partner or vendor IPs that need this service
+
+If nobody outside needs the service any more, remove the NAT policy (POLICY &gt; Rules and Policies &gt; NAT Rules) and its WAN access rule instead.
+
+Why: A port forward open to any source hands the internal server straight to Internet-wide scanning and exploitation — the firewall passes the traffic through to it. Limiting the source to the partner/vendor IPs that need the service removes the broad exposure without breaking the integration.
+Standard failing: PCI DSS v4.0 Req 1.3 &amp; 1.4; NIST SP 800-53 SC-7 (Boundary Protection); CIS Control 12.
+
+------------------------------------------------------------
+TASK 8 of 13  —  [HIGH]  VPN MFA
+------------------------------------------------------------
+What to do: SSL VPN is enabled but has NO multi-factor authentication. Choose ONE option:
+OPTION A  --  ADD MFA   (preferred)
+  Require a second factor for every SSL VPN login using DUO,
+  Entra ID, or the firewall&#x27;s built-in one-time passwords:
+    - TOTP:  DEVICE &gt; Users &gt; Local Users &amp; Groups &gt; edit the
+             SSL VPN user group &gt; One-time passwords: TOTP
+             (users enrol an authenticator app at next login).
+    - DUO:   set up the DUO Authentication Proxy as a RADIUS
+             server, then point SSL VPN auth at it
+             (DEVICE &gt; Users &gt; Settings &gt; Authentication, add the
+             RADIUS server; assign it to the SSL VPN user domain).
+    - Entra: configure SAML/SSO to Entra ID and apply it to the
+             SSL VPN portal (DEVICE &gt; Users &gt; Settings &gt; SSO/SAML).
+
+OPTION B  --  DISABLE SSL VPN   (if MFA will NOT be added)
+  Turn SSL VPN off until MFA is in place:
+    - NETWORK &gt; SSL VPN &gt; Server Settings &gt; uncheck the WAN (and
+      any other) zone under &#x27;SSL VPN Server&#x27;, and disable the
+      SSL VPN user portal.
+
+(Confirm the exact menu path for your SonicOS build.)
+
+Why: SSL VPN grants remote access to the internal network. Password-only remote access is a leading breach cause; MFA stops stolen credentials from turning into remote network access. If MFA cannot be added, the safer posture is to turn SSL VPN off rather than run remote access on single-factor passwords.
+Standard failing: FFIEC Authentication guidance (2021); PCI DSS v4.0 Req 8.4.2 &amp; 8.5 (MFA for remote access); NIST SP 800-53 IA-2(1).
+
+------------------------------------------------------------
+TASK 9 of 13  —  [MEDIUM]  External management source
+------------------------------------------------------------
+What to do: Keep the 1 management rule(s) sourced from &#x27;GMS Addresses&#x27; and rename that address group to &#x27;RT Datacenter&#x27;:
+These rules are correct and must be KEPT — their source is the RT Datacenter management addresses. Only the object&#x27;s name is wrong.
+
+Step 1: Rename the address group &#x27;GMS Addresses&#x27; to &#x27;RT Datacenter&#x27;.
+  1. OBJECT &gt; Match Objects &gt; Addresses &gt; Address Groups tab.
+  2. Edit &#x27;GMS Addresses&#x27; and set Name: RT Datacenter. Save.
+     (If SonicOS will not rename a default group, create a new Address Group named RT Datacenter with the same members, then open each rule below and change ONLY its Source field to RT Datacenter.)
+
+Step 2: Check the group&#x27;s members are only the RT Datacenter management addresses (remove any default &#x27;GMS Address&#x27; / &#x27;GMS Standby Address&#x27; placeholders).
+
+Step 3: Confirm each of these 1 rule(s) now shows source = RT Datacenter. Do NOT delete or disable them:
+    - WAN -&gt; WAN  |  service: HTTPS Management  |  source: GMS Addresses  |  destination: WAN Interface IP   [auto-created]
+
+Why: &#x27;GMS Addresses&#x27; is the RT Datacenter — the sanctioned path for managing this firewall from outside the LAN. The rules are legitimate, but the legacy name misidentifies them as GMS remnants, so they risk being removed during GMS cleanup and are hard to audit.
+Standard failing: Client management standard (NSM / datacenter management); NIST SP 800-53 CM-6 (Configuration Settings); CIS Control 4 (Secure Configuration).
+
+------------------------------------------------------------
+TASK 10 of 13  —  [MEDIUM]  VLAN segmentation
+------------------------------------------------------------
+What to do: Review this firewall&#x27;s VLANs against the suggested VLAN plan: 5 suggested VLAN(s) are missing and 1 configured VLAN(s) match no role.
+Suggested VLANs not present on this firewall (5 of 10) — add each one the site has devices for, with the segmentation below:
+  - VLAN 10  Management — Firewalls, switches, APs, mgmt interfaces
+      Segmentation: Most restricted. Permit only from admin/jump box; deny from User, Guest, IoT. No inbound internet; outbound to vendor update sources only.
+  - VLAN 20  Servers — On-prem physical &amp; virtual servers
+      Segmentation: Allow only required ports from User VLAN. No inbound from Guest/IoT. No direct inbound internet; publish externally via reverse proxy / DMZ.
+  - VLAN 60  Wireless — Corporate — Trusted staff Wi-Fi
+      Segmentation: Treat as trusted user VLAN. 802.1X or strong PSK. Same server access policy as wired users.
+  - VLAN 80  IoT / BYOD — Smart devices, thermostats, BYOD (incl. HVAC, postage meters)
+      Segmentation: Isolate from corporate. Internet limited to required cloud endpoints. Deny access to Servers, Mgmt, Workstations.
+  - VLAN 100  DMZ — Public-facing / published services
+      Segmentation: Strict firewall both directions. Deny initiation into internal VLANs; internal reaches DMZ on required ports only.
+
+Configured VLANs that match no expected role — name them and classify (or remove if unused):
+  - VLAN 150 · X0:V150 · zone LAN · 10.20.150.1/24
+
+Why: Segmenting devices by role (management, servers, users, phones, printers, Wi-Fi, guest, IoT, CCTV, DMZ) limits lateral movement: a compromised printer, camera or guest device cannot reach servers or the management plane. Missing or unnamed VLANs mean that segmentation is either absent or impossible to verify.
+Standard failing: PCI DSS v4.0 Req 1.3 (network segmentation); NIST SP 800-53 SC-7 (Boundary Protection) &amp; AC-4; CIS Control 12; FFIEC Information Security.
+
+------------------------------------------------------------
+TASK 11 of 13  —  [MEDIUM]  Ping / ICMP (WAN)
+------------------------------------------------------------
+What to do: Stop the firewall answering ping from the Internet (1 WAN Ping rule(s) currently respond to any source). Keep internal (LAN) ping enabled:
+DO THIS (one action): NETWORK &gt; Interfaces &gt; edit each WAN interface &gt; Management tab &gt; UNcheck &#x27;Ping&#x27;. Apply.
+  Leave &#x27;Ping&#x27; ENABLED on the LAN interface — internal ping is fine and useful for monitoring.
+
+Then delete (or set to DENY) any Ping rule that remains:
+    - WAN -&gt; WAN  |  service: Ping  |  source: Any  |  destination: WAN Interface IP
+
+Why: Answering ICMP echo from the Internet lets attackers discover and confirm the firewall&#x27;s public IPs during reconnaissance. Internal ping from the LAN is fine; only the Internet-facing ping response should be turned off.
+Standard failing: NIST SP 800-53 SC-7 (Boundary Protection); CIS Control 12; attack-surface reduction / defense-in-depth.
+
+------------------------------------------------------------
+TASK 12 of 13  —  [MEDIUM]  Content Filter
+------------------------------------------------------------
+What to do: Block these 3 content-filter categories (already blocked on other firewalls of this client — the source firewall is shown in brackets after each):
+Freeware/Software Downloads  [blocked on: Branch-Westside, HQ-Main]
+Gambling  [blocked on: Branch-Westside, HQ-Main]
+Games  [blocked on: Branch-Westside, HQ-Main]
+
+Why: All of this client&#x27;s firewalls should enforce the same web filtering. These categories are blocked on peer firewalls but not here, leaving a protection gap only at this site.
+Standard failing: Client security standardization policy; CIS Control 9; FFIEC (consistent control baseline across locations).
+
+------------------------------------------------------------
+TASK 13 of 13  —  [MEDIUM]  Geo-IP
+------------------------------------------------------------
+What to do: Add these 3 countries to the Geo-IP block list (already blocked on other firewalls of this client — the source firewall is shown in brackets after each):
+Belarus  [blocked on: Branch-Westside, HQ-Main]
+Nigeria  [blocked on: Branch-Westside, HQ-Main]
+Venezuela  [blocked on: Branch-Westside, HQ-Main]
+
+Why: Uniform geo-blocking across all sites gives consistent defense-in-depth against high-risk/sanctioned regions. These countries are blocked elsewhere but reachable here.
+Standard failing: Client security standardization policy; supports OFAC sanctions posture &amp; FFIEC risk-based controls.
+</textarea><span id='title0' style='display:none'>Remediation Ticket — Branch-Downtown (TZ 270, serial 0017C5B00002)</span><span id='fname0' style='display:none'>Branch-Downtown_0017C5B00002_remediation</span></div></div><div class='card' style='padding:0;overflow:hidden'><div style='background:#0b2540;color:#fff;padding:16px 20px'><div style='font-size:19px;font-weight:700'>Branch-Westside</div><div style='opacity:.75;font-size:12.5px;margin-top:3px'>TZ 270 &nbsp;·&nbsp; serial 0017C5C00003</div></div><div style='padding:16px 20px'><p style='margin:0 0 4px'><span class='pill red'>5 HIGH</span> <span class='pill orange'>4 MEDIUM</span> <span class='pill gray'>1 LOW</span> &nbsp;<b>10 tasks</b></p><div id='doc1'><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>1</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>IPS/IDS<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 1 of 10</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Enable Intrusion Prevention globally (POLICY &gt; Security Services &gt; Intrusion Prevention &gt; Enable IPS) and confirm the LAN zone has the IPS profile applied.</div><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> With IPS off, known exploit and attack traffic reaches internal hosts uninspected — there is no in-line detection or blocking of network attacks.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> PCI DSS v4.0 Req 11.5.1 (IDS/IPS); NIST SP 800-53 SI-4 (System Monitoring); CIS Control 13 (Network Monitoring &amp; Defense).</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>2</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Management plane isolation<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 2 of 10</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Only LAN may manage this firewall. Right now 2 rules let other zones (VPN, WAN, VLANs) reach the admin interface or SSH. Fix them in the order below:</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>Do these in order. Most of these rules are auto-created by SonicWall, so a few settings changes clear almost all of them — you do NOT delete 30+ rules by hand.
+
+Step 1: Delete (or set Action = Deny) these 2 remaining rule(s) by hand.
+  Go to POLICY &gt; Rules and Policies &gt; Access Rules, find each one by its zone pair + service, and delete it:
+    - WAN -&gt; WAN  |  service: HTTP Management  |  source: Any  |  destination: WAN Interface IP   [auto-created]
+    - WAN -&gt; WAN  |  service: HTTPS Management  |  source: Any  |  destination: WAN Interface IP   [auto-created]</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> The firewall&#x27;s own management plane must be isolated. Any VPN user or device on a segmented VLAN that can reach the admin GUI or SSH can attack the firewall itself — a single compromised VPN session or VLAN host would defeat all segmentation. Only the LAN zone may manage the device.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> NIST SP 800-53 AC-6 (Least Privilege) &amp; SC-7 (Boundary Protection); CIS Control 12.6 (dedicated/secure admin access); PCI DSS v4.0 Req 1.3 &amp; 2.2.7; FFIEC Information Security.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>3</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Missing NSM rules<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 3 of 10</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Bring this firewall under NSM management from the RT Datacenter: enable the GMS/NSM management channel and add the RT Datacenter management rules.</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>Step 1: Enable NSM management on the firewall.
+  1. DEVICE &gt; Settings &gt; Administration — GMS/NSM settings (SonicOS uses the GMS settings for NSM management).
+  2. Turn ON &#x27;Enable management using GMS/NSM&#x27; and point it at the NSM server in the RT Datacenter. Use the same management mode as the rest of the fleet (copy it from a compliant firewall).
+  3. Save, then confirm the firewall shows as managed/online in the NSM console.
+
+Step 2: Allow firewall management from the RT Datacenter.
+  1. OBJECT &gt; Match Objects &gt; Addresses — make sure an Address Group named RT Datacenter exists holding the datacenter management addresses (copy its members from a compliant firewall).
+  2. POLICY &gt; Rules and Policies &gt; Access Rules — add (or fix) the management rules: zone WAN (or VPN if NSM is reached through the tunnel) -&gt; WAN, services HTTPS Management and SSH Management, Source = RT Datacenter, Destination = the firewall&#x27;s management IPs.
+  3. Do NOT use &#x27;Any&#x27; as the source — only the datacenter object.</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> The fleet is managed centrally by NSM from the RT Datacenter. A firewall outside NSM does not receive the standard policy, firmware and backup management the other firewalls get, so it drifts out of compliance and cannot be audited or fixed centrally.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> Client management standard (NSM); NIST SP 800-53 CM-6 (Configuration Settings) &amp; CM-7 (Least Functionality); CIS Control 4 (Secure Configuration).</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>4</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Trusted LAN<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 4 of 10</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Review and remove/deny each of these 4 rules that let a NON-trusted zone reach the LAN. (Trusted zones LAN/SSLVPN — including SSL VPN remote users — are allowed and are not listed.)</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>GUEST -&gt; LAN  |  service: Web Services  |  source: Any  |  destination: LAN Subnets
+IOT -&gt; LAN  |  service: Any  |  source: Any  |  destination: LAN Subnets
+VPN -&gt; LAN  |  service: Any  |  source: HQ LAN  |  destination: LAN Subnets
+WAN -&gt; LAN  |  service: Any  |  source: Any  |  destination: LAN Primary Subnet</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> The trusted LAN holds the institution&#x27;s core systems. A non-trusted segment (printers, phones, IoT, cameras, site-to-site VPN) permitted into it breaks segmentation and lets a compromised segment pivot into core banking systems. SSL VPN users are trusted and keep their LAN access.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> PCI DSS v4.0 Req 1.3 &amp; 1.4 (network segmentation); NIST SP 800-53 SC-7; CIS Control 12; FFIEC Information Security.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fbe9e7;border-left:6px solid #c0392b'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#c0392b;color:#fff;font-weight:700;font-size:14px'>5</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Branch-to-branch VPN (WAN -&gt; LAN)<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 5 of 10</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#c0392b;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>HIGH</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Pin these 1 WAN -&gt; LAN rules to the known branch subnets — source = other branches&#x27; LANs, destination = this branch&#x27;s LAN (10.30.10.0/24). They must never be &#x27;Any&#x27;:</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>These rules carry branch-to-branch VPN traffic but currently accept ANY source to ANY/WAN-IP destination. We know every branch&#x27;s LAN subnet from their configs, so pin BOTH ends:
+  source      = the OTHER branches&#x27; LANs
+  destination = THIS branch&#x27;s LAN (10.30.10.0/24)
+
+Step 1: Create a Network object for each OTHER branch&#x27;s LAN (OBJECT &gt; Match Objects &gt; Addresses &gt; Add; Type: Network):
+    - Name: Branch-Downtown-LAN   Network: 10.20.10.0   Mask: 255.255.255.0   (= 10.20.10.0/24)
+    - Name: HQ-Main-LAN   Network: 10.10.10.0   Mask: 255.255.255.0   (= 10.10.10.0/24)
+
+Step 2: Create an Address GROUP named &#x27;Branch-Trusted-Nets&#x27; and add every Step 1 object. (This is the SOURCE for all the rules below.)
+
+Step 3: Edit each rule below — set BOTH its Source and Destination. This branch&#x27;s LAN is the built-in &#x27;LAN Primary Subnet&#x27; object (= 10.30.10.0/24):
+  RULE: WAN -&gt; LAN | service: Any
+     &gt;&gt;&gt; Source:       Any  =&gt;  Branch-Trusted-Nets
+     &gt;&gt;&gt; Destination:  LAN Primary Subnet  =&gt;  LAN Primary Subnet   (= 10.30.10.0/24)</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> A WAN -&gt; LAN rule with an &#x27;Any&#x27; source (and &#x27;Any&#x27;/WAN-IP destination) lets the entire Internet into the trusted LAN, not just the sister branches. Because every branch&#x27;s LAN subnet is known from its config, both ends can be pinned exactly: only the sister branches&#x27; LANs reach only this branch&#x27;s LAN.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> PCI DSS v4.0 Req 1.2/1.3 (restrict inbound to that required); NIST SP 800-53 SC-7 (Boundary Protection); CIS Control 12.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fdf3e3;border-left:6px solid #d98324'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#d98324;color:#fff;font-weight:700;font-size:14px'>6</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Management<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 6 of 10</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#d98324;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>MEDIUM</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Tighten each of these 2 LAN management rules to &lt;= 2 source IPs:</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>LAN -&gt; LAN  |  service: HTTPS Management  |  source: IT Staff  |  destination: All X0 Management IP
+LAN -&gt; LAN  |  service: SSH Management  |  source: IT Staff  |  destination: All X0 Management IP</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> Management access should be limited to at most 2 known admin IPs. Broad source ranges leave more hosts able to attack the management plane than necessary.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> NIST SP 800-53 AC-6 (Least Privilege); CIS Control 12; PCI DSS v4.0 Req 1.3.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fdf3e3;border-left:6px solid #d98324'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#d98324;color:#fff;font-weight:700;font-size:14px'>7</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>VLAN segmentation<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 7 of 10</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#d98324;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>MEDIUM</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Review this firewall&#x27;s VLANs against the suggested VLAN plan: 6 suggested VLAN(s) are missing.</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>Suggested VLANs not present on this firewall (6 of 10) — add each one the site has devices for, with the segmentation below:
+  - VLAN 10  Management — Firewalls, switches, APs, mgmt interfaces
+      Segmentation: Most restricted. Permit only from admin/jump box; deny from User, Guest, IoT. No inbound internet; outbound to vendor update sources only.
+  - VLAN 20  Servers — On-prem physical &amp; virtual servers
+      Segmentation: Allow only required ports from User VLAN. No inbound from Guest/IoT. No direct inbound internet; publish externally via reverse proxy / DMZ.
+  - VLAN 50  Printers / MFP — Printers, copiers, scanners
+      Segmentation: Allow print/scan from User VLAN only. Block internet (allow vendor cloud-print if required). Deny inbound from Guest/IoT.
+  - VLAN 60  Wireless — Corporate — Trusted staff Wi-Fi
+      Segmentation: Treat as trusted user VLAN. 802.1X or strong PSK. Same server access policy as wired users.
+  - VLAN 90  Security / CCTV — NVR, IP cameras, access control
+      Segmentation: Isolate NVR and cameras. No internet (or vendor-only). Management access from Mgmt/admin VLAN only.
+  - VLAN 100  DMZ — Public-facing / published services
+      Segmentation: Strict firewall both directions. Deny initiation into internal VLANs; internal reaches DMZ on required ports only.
+</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> Segmenting devices by role (management, servers, users, phones, printers, Wi-Fi, guest, IoT, CCTV, DMZ) limits lateral movement: a compromised printer, camera or guest device cannot reach servers or the management plane. Missing or unnamed VLANs mean that segmentation is either absent or impossible to verify.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> PCI DSS v4.0 Req 1.3 (network segmentation); NIST SP 800-53 SC-7 (Boundary Protection) &amp; AC-4; CIS Control 12; FFIEC Information Security.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fdf3e3;border-left:6px solid #d98324'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#d98324;color:#fff;font-weight:700;font-size:14px'>8</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Content Filter<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 8 of 10</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#d98324;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>MEDIUM</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Block these 2 content-filter categories (already blocked on other firewalls of this client — the source firewall is shown in brackets after each):</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>Hacking/Proxy Avoidance Systems  [blocked on: Branch-Downtown, HQ-Main]
+Peer-to-Peer  [blocked on: Branch-Downtown, HQ-Main]</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> All of this client&#x27;s firewalls should enforce the same web filtering. These categories are blocked on peer firewalls but not here, leaving a protection gap only at this site.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> Client security standardization policy; CIS Control 9; FFIEC (consistent control baseline across locations).</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#fdf3e3;border-left:6px solid #d98324'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#d98324;color:#fff;font-weight:700;font-size:14px'>9</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>Geo-IP<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 9 of 10</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#d98324;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>MEDIUM</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Add these 2 countries to the Geo-IP block list (already blocked on other firewalls of this client — the source firewall is shown in brackets after each):</div><pre style='margin:2px 0 14px;white-space:pre-wrap;font-family:SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;font-size:12.5px;line-height:1.65;background:#f6f8fa;border:1px solid #e4e8ec;border-radius:8px;padding:13px 15px;color:#20303f'>Pakistan  [blocked on: Branch-Downtown, HQ-Main]
+Ukraine  [blocked on: Branch-Downtown, HQ-Main]</pre><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> Uniform geo-blocking across all sites gives consistent defense-in-depth against high-risk/sanctioned regions. These countries are blocked elsewhere but reachable here.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> Client security standardization policy; supports OFAC sanctions posture &amp; FFIEC risk-based controls.</div></div></div><div style='margin:20px 0 0;border:1px solid #e0e5ea;border-radius:10px;overflow:hidden'><div style='padding:12px 16px;background:#eef1f4;border-left:6px solid #6b7a8f'><table style='border:0;background:none;box-shadow:none;width:100%;margin:0'><tr style='background:none'><td style='border:0;padding:0;width:34px;vertical-align:middle'><span style='display:inline-block;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:#6b7a8f;color:#fff;font-weight:700;font-size:14px'>10</span></td><td style='border:0;padding:0 10px;vertical-align:middle;font-weight:700;font-size:16px;color:#0b2540'>VPN / MFA authentication (verify)<span style='color:#7a8794;font-weight:400;font-size:12px'> &nbsp;· Task 10 of 10</span></td><td style='border:0;padding:0;text-align:right;vertical-align:middle'><span style='background:#6b7a8f;color:#fff;font-weight:700;font-size:11px;padding:4px 11px;border-radius:12px'>LOW</span></td></tr></table></div><div style='padding:15px 18px'><div style='font-size:14px;line-height:1.55;margin-bottom:10px'><b>What to do:</b> Confirm the RADIUS server (10.10.20.16) is backed by Active Directory / Entra ID, so VPN accounts are centrally managed and deprovisioned.</div><div style='background:#eef5fb;border-left:4px solid #8fb4d8;padding:9px 13px;border-radius:6px;font-size:13px;line-height:1.55;color:#33465a'><b>Why:</b> Users authenticate through RADIUS; the export does not show what directory sits behind it. If it is a local user database, accounts are not centrally managed, logged, or disabled at termination.</div><div style='margin-top:9px;font-size:11.5px;color:#8a97a4'><b>Standard:</b> FFIEC Information Security (access management); NIST SP 800-53 AC-2 (Account Management); CIS Control 6.</div></div></div></div><div style='margin-top:16px'><button class='copybtn' onclick="copyTicket(1)">&#128203; Copy ticket text</button> <button class='copybtn' onclick="downloadDoc(1)">&#11015; Download Word (.doc)</button></div><textarea id='tick1' style='display:none'>------------------------------------------------------------
+REMEDIATION TICKET — Branch-Westside (TZ 270, serial 0017C5C00003)
+10 remediation tasks (5 HIGH, 4 MEDIUM)
+------------------------------------------------------------
+
+------------------------------------------------------------
+TASK 1 of 10  —  [HIGH]  IPS/IDS
+------------------------------------------------------------
+What to do: Enable Intrusion Prevention globally (POLICY &gt; Security Services &gt; Intrusion Prevention &gt; Enable IPS) and confirm the LAN zone has the IPS profile applied.
+
+Why: With IPS off, known exploit and attack traffic reaches internal hosts uninspected — there is no in-line detection or blocking of network attacks.
+Standard failing: PCI DSS v4.0 Req 11.5.1 (IDS/IPS); NIST SP 800-53 SI-4 (System Monitoring); CIS Control 13 (Network Monitoring &amp; Defense).
+
+------------------------------------------------------------
+TASK 2 of 10  —  [HIGH]  Management plane isolation
+------------------------------------------------------------
+What to do: Only LAN may manage this firewall. Right now 2 rules let other zones (VPN, WAN, VLANs) reach the admin interface or SSH. Fix them in the order below:
+Do these in order. Most of these rules are auto-created by SonicWall, so a few settings changes clear almost all of them — you do NOT delete 30+ rules by hand.
+
+Step 1: Delete (or set Action = Deny) these 2 remaining rule(s) by hand.
+  Go to POLICY &gt; Rules and Policies &gt; Access Rules, find each one by its zone pair + service, and delete it:
+    - WAN -&gt; WAN  |  service: HTTP Management  |  source: Any  |  destination: WAN Interface IP   [auto-created]
+    - WAN -&gt; WAN  |  service: HTTPS Management  |  source: Any  |  destination: WAN Interface IP   [auto-created]
+
+Why: The firewall&#x27;s own management plane must be isolated. Any VPN user or device on a segmented VLAN that can reach the admin GUI or SSH can attack the firewall itself — a single compromised VPN session or VLAN host would defeat all segmentation. Only the LAN zone may manage the device.
+Standard failing: NIST SP 800-53 AC-6 (Least Privilege) &amp; SC-7 (Boundary Protection); CIS Control 12.6 (dedicated/secure admin access); PCI DSS v4.0 Req 1.3 &amp; 2.2.7; FFIEC Information Security.
+
+------------------------------------------------------------
+TASK 3 of 10  —  [HIGH]  Missing NSM rules
+------------------------------------------------------------
+What to do: Bring this firewall under NSM management from the RT Datacenter: enable the GMS/NSM management channel and add the RT Datacenter management rules.
+Step 1: Enable NSM management on the firewall.
+  1. DEVICE &gt; Settings &gt; Administration — GMS/NSM settings (SonicOS uses the GMS settings for NSM management).
+  2. Turn ON &#x27;Enable management using GMS/NSM&#x27; and point it at the NSM server in the RT Datacenter. Use the same management mode as the rest of the fleet (copy it from a compliant firewall).
+  3. Save, then confirm the firewall shows as managed/online in the NSM console.
+
+Step 2: Allow firewall management from the RT Datacenter.
+  1. OBJECT &gt; Match Objects &gt; Addresses — make sure an Address Group named RT Datacenter exists holding the datacenter management addresses (copy its members from a compliant firewall).
+  2. POLICY &gt; Rules and Policies &gt; Access Rules — add (or fix) the management rules: zone WAN (or VPN if NSM is reached through the tunnel) -&gt; WAN, services HTTPS Management and SSH Management, Source = RT Datacenter, Destination = the firewall&#x27;s management IPs.
+  3. Do NOT use &#x27;Any&#x27; as the source — only the datacenter object.
+
+Why: The fleet is managed centrally by NSM from the RT Datacenter. A firewall outside NSM does not receive the standard policy, firmware and backup management the other firewalls get, so it drifts out of compliance and cannot be audited or fixed centrally.
+Standard failing: Client management standard (NSM); NIST SP 800-53 CM-6 (Configuration Settings) &amp; CM-7 (Least Functionality); CIS Control 4 (Secure Configuration).
+
+------------------------------------------------------------
+TASK 4 of 10  —  [HIGH]  Trusted LAN
+------------------------------------------------------------
+What to do: Review and remove/deny each of these 4 rules that let a NON-trusted zone reach the LAN. (Trusted zones LAN/SSLVPN — including SSL VPN remote users — are allowed and are not listed.)
+GUEST -&gt; LAN  |  service: Web Services  |  source: Any  |  destination: LAN Subnets
+IOT -&gt; LAN  |  service: Any  |  source: Any  |  destination: LAN Subnets
+VPN -&gt; LAN  |  service: Any  |  source: HQ LAN  |  destination: LAN Subnets
+WAN -&gt; LAN  |  service: Any  |  source: Any  |  destination: LAN Primary Subnet
+
+Why: The trusted LAN holds the institution&#x27;s core systems. A non-trusted segment (printers, phones, IoT, cameras, site-to-site VPN) permitted into it breaks segmentation and lets a compromised segment pivot into core banking systems. SSL VPN users are trusted and keep their LAN access.
+Standard failing: PCI DSS v4.0 Req 1.3 &amp; 1.4 (network segmentation); NIST SP 800-53 SC-7; CIS Control 12; FFIEC Information Security.
+
+------------------------------------------------------------
+TASK 5 of 10  —  [HIGH]  Branch-to-branch VPN (WAN -&gt; LAN)
+------------------------------------------------------------
+What to do: Pin these 1 WAN -&gt; LAN rules to the known branch subnets — source = other branches&#x27; LANs, destination = this branch&#x27;s LAN (10.30.10.0/24). They must never be &#x27;Any&#x27;:
+These rules carry branch-to-branch VPN traffic but currently accept ANY source to ANY/WAN-IP destination. We know every branch&#x27;s LAN subnet from their configs, so pin BOTH ends:
+  source      = the OTHER branches&#x27; LANs
+  destination = THIS branch&#x27;s LAN (10.30.10.0/24)
+
+Step 1: Create a Network object for each OTHER branch&#x27;s LAN (OBJECT &gt; Match Objects &gt; Addresses &gt; Add; Type: Network):
+    - Name: Branch-Downtown-LAN   Network: 10.20.10.0   Mask: 255.255.255.0   (= 10.20.10.0/24)
+    - Name: HQ-Main-LAN   Network: 10.10.10.0   Mask: 255.255.255.0   (= 10.10.10.0/24)
+
+Step 2: Create an Address GROUP named &#x27;Branch-Trusted-Nets&#x27; and add every Step 1 object. (This is the SOURCE for all the rules below.)
+
+Step 3: Edit each rule below — set BOTH its Source and Destination. This branch&#x27;s LAN is the built-in &#x27;LAN Primary Subnet&#x27; object (= 10.30.10.0/24):
+  RULE: WAN -&gt; LAN | service: Any
+     &gt;&gt;&gt; Source:       Any  =&gt;  Branch-Trusted-Nets
+     &gt;&gt;&gt; Destination:  LAN Primary Subnet  =&gt;  LAN Primary Subnet   (= 10.30.10.0/24)
+
+Why: A WAN -&gt; LAN rule with an &#x27;Any&#x27; source (and &#x27;Any&#x27;/WAN-IP destination) lets the entire Internet into the trusted LAN, not just the sister branches. Because every branch&#x27;s LAN subnet is known from its config, both ends can be pinned exactly: only the sister branches&#x27; LANs reach only this branch&#x27;s LAN.
+Standard failing: PCI DSS v4.0 Req 1.2/1.3 (restrict inbound to that required); NIST SP 800-53 SC-7 (Boundary Protection); CIS Control 12.
+
+------------------------------------------------------------
+TASK 6 of 10  —  [MEDIUM]  Management
+------------------------------------------------------------
+What to do: Tighten each of these 2 LAN management rules to &lt;= 2 source IPs:
+LAN -&gt; LAN  |  service: HTTPS Management  |  source: IT Staff  |  destination: All X0 Management IP
+LAN -&gt; LAN  |  service: SSH Management  |  source: IT Staff  |  destination: All X0 Management IP
+
+Why: Management access should be limited to at most 2 known admin IPs. Broad source ranges leave more hosts able to attack the management plane than necessary.
+Standard failing: NIST SP 800-53 AC-6 (Least Privilege); CIS Control 12; PCI DSS v4.0 Req 1.3.
+
+------------------------------------------------------------
+TASK 7 of 10  —  [MEDIUM]  VLAN segmentation
+------------------------------------------------------------
+What to do: Review this firewall&#x27;s VLANs against the suggested VLAN plan: 6 suggested VLAN(s) are missing.
+Suggested VLANs not present on this firewall (6 of 10) — add each one the site has devices for, with the segmentation below:
+  - VLAN 10  Management — Firewalls, switches, APs, mgmt interfaces
+      Segmentation: Most restricted. Permit only from admin/jump box; deny from User, Guest, IoT. No inbound internet; outbound to vendor update sources only.
+  - VLAN 20  Servers — On-prem physical &amp; virtual servers
+      Segmentation: Allow only required ports from User VLAN. No inbound from Guest/IoT. No direct inbound internet; publish externally via reverse proxy / DMZ.
+  - VLAN 50  Printers / MFP — Printers, copiers, scanners
+      Segmentation: Allow print/scan from User VLAN only. Block internet (allow vendor cloud-print if required). Deny inbound from Guest/IoT.
+  - VLAN 60  Wireless — Corporate — Trusted staff Wi-Fi
+      Segmentation: Treat as trusted user VLAN. 802.1X or strong PSK. Same server access policy as wired users.
+  - VLAN 90  Security / CCTV — NVR, IP cameras, access control
+      Segmentation: Isolate NVR and cameras. No internet (or vendor-only). Management access from Mgmt/admin VLAN only.
+  - VLAN 100  DMZ — Public-facing / published services
+      Segmentation: Strict firewall both directions. Deny initiation into internal VLANs; internal reaches DMZ on required ports only.
+
+
+Why: Segmenting devices by role (management, servers, users, phones, printers, Wi-Fi, guest, IoT, CCTV, DMZ) limits lateral movement: a compromised printer, camera or guest device cannot reach servers or the management plane. Missing or unnamed VLANs mean that segmentation is either absent or impossible to verify.
+Standard failing: PCI DSS v4.0 Req 1.3 (network segmentation); NIST SP 800-53 SC-7 (Boundary Protection) &amp; AC-4; CIS Control 12; FFIEC Information Security.
+
+------------------------------------------------------------
+TASK 8 of 10  —  [MEDIUM]  Content Filter
+------------------------------------------------------------
+What to do: Block these 2 content-filter categories (already blocked on other firewalls of this client — the source firewall is shown in brackets after each):
+Hacking/Proxy Avoidance Systems  [blocked on: Branch-Downtown, HQ-Main]
+Peer-to-Peer  [blocked on: Branch-Downtown, HQ-Main]
+
+Why: All of this client&#x27;s firewalls should enforce the same web filtering. These categories are blocked on peer firewalls but not here, leaving a protection gap only at this site.
+Standard failing: Client security standardization policy; CIS Control 9; FFIEC (consistent control baseline across locations).
+
+------------------------------------------------------------
+TASK 9 of 10  —  [MEDIUM]  Geo-IP
+------------------------------------------------------------
+What to do: Add these 2 countries to the Geo-IP block list (already blocked on other firewalls of this client — the source firewall is shown in brackets after each):
+Pakistan  [blocked on: Branch-Downtown, HQ-Main]
+Ukraine  [blocked on: Branch-Downtown, HQ-Main]
+
+Why: Uniform geo-blocking across all sites gives consistent defense-in-depth against high-risk/sanctioned regions. These countries are blocked elsewhere but reachable here.
+Standard failing: Client security standardization policy; supports OFAC sanctions posture &amp; FFIEC risk-based controls.
+
+------------------------------------------------------------
+TASK 10 of 10  —  [LOW]  VPN / MFA authentication (verify)
+------------------------------------------------------------
+What to do: Confirm the RADIUS server (10.10.20.16) is backed by Active Directory / Entra ID, so VPN accounts are centrally managed and deprovisioned.
+
+Why: Users authenticate through RADIUS; the export does not show what directory sits behind it. If it is a local user database, accounts are not centrally managed, logged, or disabled at termination.
+Standard failing: FFIEC Information Security (access management); NIST SP 800-53 AC-2 (Account Management); CIS Control 6.
+</textarea><span id='title1' style='display:none'>Remediation Ticket — Branch-Westside (TZ 270, serial 0017C5C00003)</span><span id='fname1' style='display:none'>Branch-Westside_0017C5C00003_remediation</span></div></div><div class='card' style='padding:0;overflow:hidden'><div style='background:#0b2540;color:#fff;padding:16px 20px'><div style='font-size:19px;font-weight:700'>HQ-Main</div><div style='opacity:.75;font-size:12.5px;margin-top:3px'>TZ 470 &nbsp;·&nbsp; serial 0017C5A00001</div></div><div style='padding:16px 20px'><p class='pass' style='font-size:15px'>&#10004; No remediation required — this firewall is compliant.</p></div></div><script>
+function copyTicket(i){var t=document.getElementById('tick'+i);
+if(navigator.clipboard&&navigator.clipboard.writeText){
+navigator.clipboard.writeText(t.value);}else{
+t.style.display='block';t.select();document.execCommand('copy');
+t.style.display='none';}}
+function downloadDoc(i){
+var body=document.getElementById('doc'+i).innerHTML;
+var title=document.getElementById('title'+i).textContent;
+var fname=document.getElementById('fname'+i).textContent;
+var css='<style>body{font-family:Calibri,"Segoe UI",Arial,sans-serif;'
++'font-size:11pt;color:#1c2530;line-height:1.45}'
++'h1{font-size:16pt;color:#0b2540;border-bottom:2px solid #0b2540;'
++'padding-bottom:6px;margin-bottom:14px}'
++'b{color:#0b2540}'
++'pre{font-family:Consolas,"Courier New",monospace;font-size:9.5pt;'
++'white-space:pre-wrap;background:#f6f8fa;border:1px solid #e4e8ec;'
++'padding:10px;line-height:1.5}</style>';
+var html='<html xmlns:o="urn:schemas-microsoft-com:office:office" '
++'xmlns:w="urn:schemas-microsoft-com:office:word" '
++'xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8">'
++'<title>'+title+'</title>'+css+'</head><body>'
++'<div style="font-size:9pt;letter-spacing:2px;color:#0b5cad;'
++'font-weight:bold">AUDITHAT.COM</div><h1>'+title+'</h1>'+body
++'</body></html>';
+var blob=new Blob(['\ufeff'+html],{type:'application/msword'});
+var url=URL.createObjectURL(blob);
+var a=document.createElement('a');a.href=url;a.download=fname+'.doc';
+document.body.appendChild(a);a.click();document.body.removeChild(a);
+setTimeout(function(){URL.revokeObjectURL(url);},1000);}
+</script></main>
