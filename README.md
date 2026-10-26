@@ -1,8 +1,17 @@
-# SonicWall EXP Comparison & Audit
+# SonicWall Firewall EXP Config Standards Analyzer
 
 Compares multiple SonicWall EXP config exports (same client) for **content
 filtering**, **IPS/IDS**, **VLAN inter-communication**, and **management access
 restrictions**, and produces colorized HTML reports.
+
+Repo: https://github.com/ryanerb4/SonicWall-Firewall-EXP-Config-Standards-Analyzer
+
+## Getting started
+```
+git clone https://github.com/ryanerb4/SonicWall-Firewall-EXP-Config-Standards-Analyzer.git
+cd SonicWall-Firewall-EXP-Config-Standards-Analyzer
+```
+Python 3 only — no third-party packages required.
 
 ## Web app (recommended)
 ```
@@ -106,3 +115,6 @@ Spot-check against the firewall UI (Security Services → Geo-IP Filter).
   (`policyDstSvc = *Management`). Host/range/network source objects are resolved
   to exact IP counts; **address _groups_** are treated as "specific" but their
   member count isn't expanded yet — worth spot-checking named groups by hand.
+
+## License
+Apache License 2.0 — see `LICENSE`.
