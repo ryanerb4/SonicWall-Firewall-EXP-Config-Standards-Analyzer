@@ -1,9 +1,18 @@
 # SonicWall EXP Comparison & Audit
 
+A simple, well-designed web app for auditing a whole fleet of SonicWall
+firewalls from their EXP config exports. Drag in **10+ exports at once** and it
+lines the firewalls up side by side, highlights every setting that differs,
+grades each one against a written standard, and writes the ticket-ready steps
+to bring them all into the **same, compliant configuration**. Every audit is
+kept in a searchable history, so you can reopen last quarter's results, re-run
+after the fixes are made, and show exactly what changed.
+
 Built by [AuditHat.com](https://audithat.com) for **banks and credit unions**.
-Compares multiple SonicWall EXP config exports (same client) for **content
-filtering**, **IPS/IDS**, **VLAN inter-communication**, and **management access
-restrictions**, and produces colorized HTML reports.
+It checks **content filtering**, **IPS/IDS**, **VLAN segmentation**,
+**management access restrictions**, VPN authentication and MFA, port forwards,
+and Geo-IP blocking across every firewall for a client, and produces colorized
+HTML reports.
 
 Every finding is tied to the standard it affects (PCI DSS, NIST SP 800-53, CIS
 Controls, FFIEC Information Security), so the remediation tickets double as
