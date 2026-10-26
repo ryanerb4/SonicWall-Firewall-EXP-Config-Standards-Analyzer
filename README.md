@@ -162,5 +162,10 @@ Spot-check against the firewall UI (Security Services → Geo-IP Filter).
   to exact IP counts; **address _groups_** are treated as "specific" but their
   member count isn't expanded yet — worth spot-checking named groups by hand.
 
+## About the author
+Written by Ryan Erb — [erb.one](https://erb.one). Part of the
+[AuditHat.com](https://audithat.com) toolset for bank and credit union IT
+audits.
+
 ## License
 Apache License 2.0 — see `LICENSE`.
